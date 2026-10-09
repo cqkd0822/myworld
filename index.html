@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover 是给 iPhone 刘海屏用的：不加的话底部标签栏会陷进
+         Home 指示条里，加了下方的 safe-area-inset 才会生效 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f2f4f8" />
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="description"
+      content="个人行程记录：航班、铁路与徒步轨迹。数据全部为静态文件，无后端、无追踪。"
+    />
+
+    <title>MyWorld · 行程记录</title>
+
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="favicon.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MyWorld" />
+
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <button class="topbar__back" id="back" type="button" aria-label="返回" style="display: none">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <h1 class="topbar__title" id="topTitle">MyWorld</h1>
+      </div>
+    </header>
+
+    <main class="view" id="view">
+      <div class="boot" id="boot">正在加载行程数据…</div>
+    </main>
+
+    <nav class="tabbar" id="tabs" aria-label="主导航"></nav>
+
+    <!--
+      全部用普通 <script>（不是 type="module"），顺序即依赖顺序。
+      这样做是为了让 index.html 直接用 file:// 双击打开也能跑——
+      ES module 在 file:// 下会被 CORS 拦掉，那样本地预览就没法用了。
+    -->
+    <script src="assets/data/site.js"></script>
+    <script src="assets/data/airports.js"></script>
+    <script src="assets/data/flights.js"></script>
+    <script src="assets/data/rail.js"></script>
+    <script src="assets/data/tracks.js"></script>
+    <script src="assets/js/data-utils.js"></script>
+    <script src="assets/js/map.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

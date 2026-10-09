@@ -1,0 +1,19 @@
+{
+  "name": "MyWorld · 行程记录",
+  "short_name": "MyWorld",
+  "description": "个人行程记录：航班、铁路与徒步轨迹",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f4f8",
+  "theme_color": "#1b6ff0",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

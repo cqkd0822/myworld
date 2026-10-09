@@ -1,0 +1,728 @@
+/**
+ * 应用主逻辑 —— 路由 + 四个视图的渲染。
+ *
+ * 没有框架，也不需要：数据是静态的（100 段航班 + 47 段铁路 + 2 条轨迹，
+ * 全量序列化后不到 130 KB），页面用模板字符串拼出来就行。
+ * 这样整个站零依赖、零构建，鼠标双击 index.html 就能看。
+ *
+ * 路由用 hash（#/flights 这种）。选 hash 而不是 history API，是因为
+ * GitHub Pages 这类静态托管没有服务端重写，history 路由一刷新就 404。
+ */
+
+(function () {
+  const M = window.MYWORLD || {};
+
+  /**
+   * 这个站点会被直接用 file:// 双击打开，所以任何一种「脚本没加载成功」
+   * 都会让页面停在「正在加载…」而用户完全不知道为什么。
+   * 这里先检查数据层是否就绪，不成就把原因画在页面上。
+   */
+  const U = M.util;
+  if (!U || !M.site) {
+    const el = document.getElementById('boot');
+    if (el) {
+      el.innerHTML =
+        '<div style="max-width:400px;margin:0 auto">' +
+        '<b style="color:#e5484d">页面没能启动</b>' +
+        '<div style="margin-top:8px;font-size:13px">行程数据脚本没有加载完成。</div>' +
+        '<div style="margin-top:10px;font-size:12px;color:#98a2b3">' +
+        '请确认 assets/data/ 下的 5 个文件与 assets/js/data-utils.js 都在，' +
+        '并且 <script> 标签的顺序没被打乱（顺序即依赖顺序）。' +
+        '</div></div>';
+    }
+    return;
+  }
+
+  const esc = U.escapeHtml;
+
+  /* ------------------------------------------------------------------ */
+  /* 数据准备                                                            */
+  /* ------------------------------------------------------------------ */
+
+  const flights = U.buildFlights();
+  const rails = U.buildRail();
+  const voided = U.buildVoided();
+  const tracks = M.tracks || [];
+  const overview = U.computeOverview(flights, rails, tracks);
+
+  const flightYears = [...overview.flightsByYear.keys()].sort((a, b) => b - a);
+  const railYears = [...overview.railsByYear.keys()].sort((a, b) => b - a);
+  const airlineNames = overview.airlines.map((a) => a[0]);
+
+  /** 视图状态。切标签/筛选只改这个对象，然后整体重渲染。 */
+  const state = {
+    flightYear: 'all',
+    flightAirline: 'all',
+    railYear: 'all',
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* 图标                                                                */
+  /* ------------------------------------------------------------------ */
+
+  const icon = {
+    plane:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 13.4 3 11l18-7-7 18-2.4-7.6z"/></svg>',
+    planeSmall:
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M21 4 3 11l7.6 2.4L21 4zM10.6 13.4 13 21l8-17-10.4 13.4z"/></svg>',
+    arrow:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>',
+    chevron:
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
+    back:
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    download:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>',
+    pin:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="11" r="2.4"/></svg>',
+  };
+
+  // 键名必须和 TABS 里的 key 一致，否则 tabbar 上会渲染出 "undefined"
+  const tabIcon = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 4l8.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4.5V14h-5v6.5H5A1.5 1.5 0 0 1 3.5 19z"/></svg>',
+    flights:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 13.4 3 11l18-7-7 18-2.4-7.6z"/><path d="M10.6 13.4 9 20l3.4-4.2"/></svg>',
+    rail:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="13" rx="3"/><path d="M5 9.5h14M9 20l-2 1.5M15 20l2 1.5M9.5 13h.01M14.5 13h.01"/></svg>',
+    tracks:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c2.5 0 2.5-6 5-6s2.5 6 5 6 3-4 5-6"/><circle cx="4" cy="19" r="1.6"/><circle cx="19" cy="13" r="1.6"/></svg>',
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* 小块渲染函数                                                        */
+  /* ------------------------------------------------------------------ */
+
+  function flightCard(f) {
+    const fromPort = [f.from.airport, f.from.terminal].filter(Boolean).join(' ');
+    const toPort = [f.to.airport, f.to.terminal].filter(Boolean).join(' ');
+    const tag = U.delayTag(f);
+
+    const depTime = f.std ? f.std.text : '--:--';
+    // 跨日的到达时间要显式标出来，否则「00:43」会被误读成当天夜里
+    const arrBase = f.ata || f.sta;
+    const arrTime = arrBase ? arrBase.text : '--:--';
+    const arrSup = arrBase && arrBase.dayOffset ? '<sup>+1</sup>' : '';
+
+    const dur = f.blockMin ? U.formatDuration(f.blockMin) : '';
+    const km = f.distanceKm ? `${U.formatNumber(f.distanceKm)} km` : '';
+
+    const meta = [];
+    meta.push(esc(f.aircraft));
+    if (f.cabin) meta.push(esc(f.cabin) + (f.seat && f.seat !== '--' ? ` · ${esc(f.seat)}` : ''));
+    meta.push(
+      f.price != null
+        ? `<span class="price">¥${U.formatNumber(f.price)}</span>`
+        : '<span class="price price--unknown">票价未记录</span>',
+    );
+
+    const notes = [f.from.note, f.to.note].filter(Boolean);
+    if (f.reg && /存疑/.test(f.reg)) notes.push(`注册号 ${f.reg}`);
+
+    return `<article class="flight">
+  <div class="flight__top">
+    <span class="flight__date">${f.date ? `${f.date.text} ${f.date.weekday}` : f.dateRaw}</span>
+    <span class="flight__no">${esc(f.flightNo)}</span>
+    <span class="flight__airline">${esc(f.airline)}</span>
+  </div>
+  <div class="flight__body">
+    <div class="endpoint">
+      <div class="endpoint__time">${depTime}</div>
+      <div class="endpoint__city">${esc(f.from.city)}</div>
+      <div class="endpoint__port">${esc(fromPort || '—')}</div>
+    </div>
+    <div class="route">
+      <div class="route__dur">${dur}</div>
+      <div class="route__line"><span class="route__dash"></span><span class="route__plane">${
+        icon.planeSmall
+      }</span></div>
+      <div class="route__dur">${km}</div>
+    </div>
+    <div class="endpoint endpoint--to">
+      <div class="endpoint__time">${arrTime}${arrSup}</div>
+      <div class="endpoint__city">${esc(f.to.city)}</div>
+      <div class="endpoint__port">${esc(toPort || '—')}</div>
+    </div>
+  </div>
+  <div class="flight__bottom">
+    <div class="flight__meta">${meta.map(esc0).join('<i class="dot"></i>')}</div>
+    <span class="tag ${tag.cls}">${tag.text}</span>
+  </div>
+  ${
+    notes.length
+      ? `<div class="flight__bottom" style="border-top:0;padding-top:0"><div class="flight__meta" style="color:var(--ink-3)">${notes
+          .map(esc)
+          .join(' · ')}</div></div>`
+      : ''
+  }
+</article>`;
+  }
+
+  /** meta 里已经带了 HTML（price 那个 span），只对纯文本项转义 */
+  function esc0(s) {
+    return /^</.test(s) ? s : esc(s);
+  }
+
+  function railCard(r) {
+    const cls = r.kind.cls || 'rail__no--g';
+    const notes = r.note
+      ? r.note
+          .split(/[，,]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    const noteTags = notes.map((n) => {
+      let c = 'tag--neutral';
+      if (/改签/.test(n)) c = 'tag--amber';
+      else if (/候补/.test(n)) c = 'tag--rail';
+      else if (/静音/.test(n)) c = 'tag--rail';
+      return `<span class="tag ${c}">${esc(n)}</span>`;
+    });
+
+    return `<article class="rail">
+  <div class="rail__badge">
+    <div class="rail__no ${cls === 'rail__no--g' ? '' : cls}">${esc(r.train)}</div>
+    <div class="rail__kind">${r.kind.label}</div>
+  </div>
+  <div class="rail__main">
+    <div class="rail__route">
+      <span class="rail__station">${esc(r.from)}</span>
+      <span class="rail__arrow">${icon.arrow}</span>
+      <span class="rail__station">${esc(r.to)}</span>
+    </div>
+    <div class="rail__meta">
+      <span>${r.date ? `${r.date.text} ${r.date.weekday}` : r.dateRaw}</span>
+      <i class="dot"></i>
+      <span>${esc(r.seat)}</span>
+    </div>
+    ${noteTags.length ? `<div class="rail__notes">${noteTags.join('')}</div>` : ''}
+  </div>
+</article>`;
+  }
+
+  /** 按年份分组渲染一串卡片 */
+  function grouped(items, renderCard, getDate) {
+    const byYear = new Map();
+    for (const it of items) {
+      const d = getDate(it);
+      const y = d ? d.year : '未知';
+      if (!byYear.has(y)) byYear.set(y, []);
+      byYear.get(y).push(it);
+    }
+
+    const years = [...byYear.keys()].sort((a, b) => (a === '未知' ? 1 : b === '未知' ? -1 : b - a));
+
+    return years
+      .map(
+        (y) => `<section>
+  <div class="year-head">
+    <span>${y} 年</span>
+    <span class="year-head__count">${byYear.get(y).length} 段</span>
+    <span class="year-head__rule"></span>
+  </div>
+  <div class="group">${byYear.get(y).map(renderCard).join('')}</div>
+</section>`,
+      )
+      .join('');
+  }
+
+  function chipRow(label, options, active, key) {
+    return `<div class="chips__label">${esc(label)}</div>
+<div class="chips">${options
+      .map(
+        (o) =>
+          `<button class="chip${o.value === active ? ' is-active' : ''}" data-chip="${key}" data-value="${esc(
+            o.value,
+          )}">${esc(o.label)}</button>`,
+      )
+      .join('')}</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 视图：概览                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function viewHome() {
+    const spanText =
+      overview.firstDate && overview.lastDate
+        ? `${overview.firstDate} → ${overview.lastDate} · ${overview.years[0]}–${
+            overview.years[overview.years.length - 1]
+          } 年`
+        : '';
+
+    // 逐年柱状图：一段一年，蓝色是航班、青色是铁路，堆叠成出行总量
+    const maxTotal = Math.max(
+      1,
+      ...overview.years.map(
+        (y) => (overview.flightsByYear.get(y) || 0) + (overview.railsByYear.get(y) || 0),
+      ),
+    );
+
+    const bars = overview.years
+      .map((y) => {
+        const f = overview.flightsByYear.get(y) || 0;
+        const r = overview.railsByYear.get(y) || 0;
+        const total = f + r;
+        const h = (v) => `${Math.round((v / maxTotal) * 100)}%`;
+        return `<div class="bars__col" title="${y} 年：航班 ${f} 段，铁路 ${r} 段">
+  <span class="bars__n">${total || ''}</span>
+  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;height:100%">
+    <div class="bars__bar bars__bar--rail" style="height:${r ? h(r) : '0'}" ></div>
+    <div class="bars__bar" style="height:${f ? h(f) : '0'}"></div>
+  </div>
+</div>`;
+      })
+      .join('');
+
+    const yearLabels = overview.years
+      .map((y) => `<span>${String(y).slice(2)}</span>`)
+      .join('');
+
+    // 最近行程：航班和铁路混在一起按日期排，这才是「最近发生了什么」
+    const recent = [
+      ...flights.map((f) => ({
+        date: f.dateRaw,
+        html: `<div class="waypoint"><div class="waypoint__idx">${icon.planeSmall}</div>
+          <div class="waypoint__name">${esc(f.from.city)} → ${esc(f.to.city)}</div>
+          <span class="tag tag--neutral">${esc(f.flightNo)}</span></div>`,
+      })),
+      ...rails.map((r) => ({
+        date: r.dateRaw,
+        html: `<div class="waypoint"><div class="waypoint__idx" style="background:var(--rail-soft);color:var(--rail)">${icon.pin}</div>
+          <div class="waypoint__name">${esc(r.from.replace('站', ''))} → ${esc(r.to.replace('站', ''))}</div>
+          <span class="tag tag--rail">${esc(r.train)}</span></div>`,
+      })),
+    ]
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 8);
+
+    const topRoutes = overview.routes.slice(0, 5);
+
+    return `<div class="wrap">
+  <section class="hero">
+    <div class="hero__eyebrow">${esc(M.site.tagline)}</div>
+    <h1 class="hero__title">${esc(M.site.title)}</h1>
+    <div class="hero__sub">${esc(spanText)}</div>
+    <div class="hero__grid">
+      <div class="hero__stat"><b>${overview.flightCount}</b><span>段航班</span></div>
+      <div class="hero__stat"><b>${overview.railCount}</b><span>段铁路</span></div>
+      <div class="hero__stat"><b>${overview.trackCount}</b><span>条轨迹</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="stat__label">累计飞行里程</div>
+        <div class="stat__value">${U.formatNumber(Math.round(overview.distanceSum))}<small>km</small></div>
+        <div class="stat__foot">按城市间直线距离估算，约绕地球 ${(overview.distanceSum / 40075).toFixed(1)} 圈</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">到访城市</div>
+        <div class="stat__value">${overview.cities.length}<small>座</small></div>
+        <div class="stat__foot">铁路经停 ${overview.stationCount} 个车站</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">已知票价合计</div>
+        <div class="stat__value">¥${U.formatNumber(overview.fareSum)}</div>
+        <div class="stat__foot">${overview.fareCount} 段有票价 · 均价 ¥${U.formatNumber(
+          Math.round(overview.fareAvg),
+        )}</div>
+      </div>
+      <div class="stat">
+        <div class="stat__label">航班准点率</div>
+        <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
+        <div class="stat__foot">${overview.onTime} 段准点或提前 / 共 ${overview.flightCount} 段</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">逐年出行</h2>
+      <span class="section__hint">${overview.years[0]}–${
+      overview.years[overview.years.length - 1]
+    }</span>
+    </div>
+    <div class="card">
+      <div class="bars">
+        <div class="bars__row">${bars}</div>
+        <div class="bars__x">${yearLabels}</div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--brand)"></i>航班</span>
+        <span><i style="background:var(--rail)"></i>铁路</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__head"><h2 class="section__title">最常飞的航线</h2></div>
+    <div class="card panel" style="margin-top:0">
+      <div class="waypoints">
+        ${topRoutes
+          .map(
+            ([name, n], i) => `<div class="waypoint">
+          <div class="waypoint__idx">${i + 1}</div>
+          <div class="waypoint__name">${esc(name)}</div>
+          <span class="tag tag--neutral">${n} 次</span>
+        </div>`,
+          )
+          .join('')}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__head"><h2 class="section__title">最近行程</h2></div>
+    <div class="card panel" style="margin-top:0">
+      <div class="waypoints">${recent.map((r) => r.html).join('')}</div>
+    </div>
+  </section>
+
+  <p class="footnote">
+    飞行里程按城市间直线距离估算（民航实际航路比直线长 5%~15%，所以这是个下界）。
+    爬升按 10 米阈值过滤高度抖动后累加，与其他工具的数字天然会有差异。
+  </p>
+</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 视图：飞行                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function viewFlights() {
+    let list = flights;
+    if (state.flightYear !== 'all') list = list.filter((f) => f.date && f.date.year === +state.flightYear);
+    if (state.flightAirline !== 'all') list = list.filter((f) => f.airline === state.flightAirline);
+
+    const km = list.reduce((s, f) => s + (f.distanceKm || 0), 0);
+    const fare = list.reduce((s, f) => s + (f.price || 0), 0);
+
+    return `<div class="wrap">
+  <div class="filters">
+    ${chipRow(
+      '年份',
+      [{ value: 'all', label: '全部' }, ...flightYears.map((y) => ({ value: String(y), label: `${y}` }))],
+      state.flightYear,
+      'flightYear',
+    )}
+    ${chipRow(
+      '航空公司',
+      [{ value: 'all', label: '全部' }, ...airlineNames.map((a) => ({ value: a, label: a }))],
+      state.flightAirline,
+      'flightAirline',
+    )}
+  </div>
+
+  <div class="section__head">
+    <h2 class="section__title">${list.length} 段航班</h2>
+    <span class="section__hint">${U.formatNumber(Math.round(km))} km · ¥${U.formatNumber(fare)}</span>
+  </div>
+
+  ${list.length ? grouped(list, flightCard, (f) => f.date) : '<div class="empty">这个筛选条件下没有记录</div>'}
+</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 视图：铁路                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function viewRail() {
+    let list = rails;
+    if (state.railYear !== 'all') list = list.filter((r) => r.date && r.date.year === +state.railYear);
+
+    const seatKinds = new Map();
+    list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
+
+    return `<div class="wrap">
+  <div class="filters">
+    ${chipRow(
+      '年份',
+      [{ value: 'all', label: '全部' }, ...railYears.map((y) => ({ value: String(y), label: `${y}` }))],
+      state.railYear,
+      'railYear',
+    )}
+  </div>
+
+  <div class="section__head">
+    <h2 class="section__title">${list.length} 段行程</h2>
+    <span class="section__hint">${[...seatKinds.entries()].map(([k, v]) => `${k} ${v}`).join(' · ')}</span>
+  </div>
+
+  ${list.length ? grouped(list, railCard, (r) => r.date) : '<div class="empty">这个筛选条件下没有记录</div>'}
+
+  <div class="fold" id="voided">
+    <button class="fold__btn" data-fold>
+      <span>退票与改签原票</span>
+      <span class="fold__count">${voided.length} 条未成行</span>
+      <span class="fold__chev">${icon.chevron}</span>
+    </button>
+    <div class="fold__body">
+      ${voided
+        .map(
+          (v) => `<div class="voided">
+        <span class="voided__no">${esc(v.train)}</span>
+        <span class="voided__route">${esc(v.from)} → ${esc(v.to)}</span>
+        <span class="voided__why">${esc(v.reason)}</span>
+      </div>`,
+        )
+        .join('')}
+      <p class="footnote">这些票没有实际乘坐，所以不计入上面的行程数；留在这里是为了让「当初计划过什么」也有据可查。</p>
+    </div>
+  </div>
+</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 视图：足迹                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function viewTracks() {
+    if (!tracks.length) {
+      return '<div class="wrap"><div class="empty">还没有轨迹。把 GPX 放进 tools/source/ 再跑一次构建脚本。</div></div>';
+    }
+
+    const cards = tracks
+      .map((t) => {
+        const s = t.stats;
+        const pace = U.paceMinPerKm(s.durationSec, s.distanceKm);
+        return `<button class="track" data-track="${esc(t.id)}">
+  <div class="track__head">
+    <div class="track__pill" style="background:${t.color}">${icon.pin}</div>
+    <div style="flex:1;min-width:0">
+      <div class="track__name">${esc(t.name)}</div>
+      <div class="track__region">${esc(t.region)} · ${esc(t.date)}</div>
+    </div>
+    <span class="tag ${t.kind === 'race' ? 'tag--ok' : 'tag--neutral'}">${
+          t.kind === 'race' ? '已完赛' : '赛事路线'
+        }</span>
+  </div>
+  <div class="track__stats">
+    <div class="track__stat"><b>${s.distanceKm}</b><span>公里</span></div>
+    <div class="track__stat"><b>${U.formatNumber(s.ascentM)}</b><span>爬升 m</span></div>
+    <div class="track__stat"><b>${pace || (s.durationSec ? U.formatSeconds(s.durationSec) : '—')}</b><span>${
+          pace ? '配速 /km' : '用时'
+        }</span></div>
+  </div>
+</button>`;
+      })
+      .join('');
+
+    return `<div class="wrap">
+  <div class="section__head" style="margin-top:16px">
+    <h2 class="section__title">${tracks.length} 条轨迹</h2>
+    <span class="section__hint">共 ${U.formatNumber(
+      Math.round(tracks.reduce((s, t) => s + t.stats.distanceKm, 0)),
+    )} 公里</span>
+  </div>
+  <div class="group">${cards}</div>
+</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 视图：轨迹详情                                                      */
+  /* ------------------------------------------------------------------ */
+
+  let mapRef = null;
+
+  function viewTrackDetail(id) {
+    const t = tracks.find((x) => x.id === id);
+    if (!t) return '<div class="wrap"><div class="empty">找不到这条轨迹</div></div>';
+
+    const s = t.stats;
+    const pace = U.paceMinPerKm(s.durationSec, s.distanceKm);
+
+    return `<div class="wrap">
+  <div id="mapHost" class="detail__map" style="margin-top:16px"></div>
+
+  <p class="footnote" id="mapHint">${
+    t.kind === 'course'
+      ? '这是赛事官方路线文件，没有时间戳，所以没有用时和配速。'
+      : '轨迹坐标已在构建期做过 WGS-84 → GCJ-02 纠偏，与腾讯地图底图对齐。'
+  }</p>
+
+  <div class="panel">
+    <h3 class="panel__title">${esc(t.name)}</h3>
+    <div class="kv">
+      <div><div class="kv__k">总距离</div><div class="kv__v">${s.distanceKm}<small>km</small></div></div>
+      <div><div class="kv__k">累计爬升</div><div class="kv__v">${U.formatNumber(s.ascentM)}<small>m</small></div></div>
+      <div><div class="kv__k">累计下降</div><div class="kv__v">${U.formatNumber(s.descentM)}<small>m</small></div></div>
+      <div><div class="kv__k">海拔区间</div><div class="kv__v">${U.formatNumber(s.minEle)}–${U.formatNumber(
+      s.maxEle,
+    )}<small>m</small></div></div>
+      ${
+        s.durationSec
+          ? `<div><div class="kv__k">用时</div><div class="kv__v">${U.formatSeconds(s.durationSec)}</div></div>
+             <div><div class="kv__k">平均配速</div><div class="kv__v">${pace || '—'}<small>/km</small></div></div>`
+          : ''
+      }
+      <div><div class="kv__k">记录点数</div><div class="kv__v">${U.formatNumber(s.rawPoints)}<small>→ 发到浏览器 ${
+      s.shownPoints
+    }</small></div></div>
+    </div>
+    ${
+      t.startTime
+        ? `<p class="footnote">${U.formatDateTime(t.startTime)} 起 · ${U.formatDateTime(t.endTime)} 止</p>`
+        : ''
+    }
+  </div>
+
+  <div class="panel">
+    <h3 class="panel__title">海拔剖面</h3>
+    ${M.map.svgProfile(t.profile, { color: t.color })}
+  </div>
+
+  ${
+    t.waypoints.length
+      ? `<div class="panel">
+    <h3 class="panel__title">补给 / 检查点（${t.waypoints.length}）</h3>
+    <div class="waypoints">
+      ${t.waypoints
+        .map(
+          (w, i) => `<div class="waypoint">
+        <div class="waypoint__idx">${i + 1}</div>
+        <div class="waypoint__name">${esc(w.name || '未命名航点')}</div>
+        <span class="tag tag--neutral">${w.lat.toFixed(3)}, ${w.lng.toFixed(3)}</span>
+      </div>`,
+        )
+        .join('')}
+    </div>
+  </div>`
+      : ''
+  }
+
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <a class="btn" href="${esc(s.gpx)}" download>${icon.download} 下载精简 GPX</a>
+    <a class="btn btn--ghost" href="#/tracks">返回列表</a>
+  </div>
+
+  <p class="footnote">
+    原始 ${U.formatNumber(s.rawPoints)} 个点（${U.formatNumber(
+      Math.round(s.sourceBytes / 1024),
+    )} KB）已抽稀到 ${U.formatNumber(s.shownPoints)} 个点（容差 ${s.toleranceM} 米），
+    肉眼看不出差别。下载的 GPX 就是这个抽稀结果。
+    爬升按 ${s.eleThresholdM} 米阈值过滤高度抖动后累加。
+  </p>
+</div>`;
+  }
+
+  function mountTrackMap(id) {
+    const t = tracks.find((x) => x.id === id);
+    const host = document.getElementById('mapHost');
+    if (!t || !host) return;
+    mapRef = M.map.renderTrack(t, host);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 路由                                                                */
+  /* ------------------------------------------------------------------ */
+
+  const TABS = [
+    { key: 'home', label: '概览', hash: '#/' },
+    { key: 'flights', label: '飞行', hash: '#/flights' },
+    { key: 'rail', label: '铁路', hash: '#/rail' },
+    { key: 'tracks', label: '足迹', hash: '#/tracks' },
+  ];
+
+  function currentRoute() {
+    const hash = location.hash || '#/';
+    const m = hash.match(/^#\/track\/(.+)$/);
+    if (m) return { tab: 'tracks', trackId: decodeURIComponent(m[1]), detail: true };
+    if (hash.startsWith('#/flights')) return { tab: 'flights' };
+    if (hash.startsWith('#/rail')) return { tab: 'rail' };
+    if (hash.startsWith('#/tracks')) return { tab: 'tracks' };
+    return { tab: 'home' };
+  }
+
+  function renderTabs(active) {
+    return TABS.map(
+      (t) => `<a class="tabbar__btn${t.key === active ? ' is-active' : ''}" href="${t.hash}">
+      ${tabIcon[t.key]}<span>${t.label}</span></a>`,
+    ).join('');
+  }
+
+  function render() {
+    const route = currentRoute();
+    const view = document.getElementById('view');
+
+    // 换页前先释放地图实例，否则每进一次详情就多留一个 WebGL context
+    if (mapRef) {
+      M.map.destroy();
+      mapRef = null;
+    }
+
+    let html;
+    if (route.detail) html = viewTrackDetail(route.trackId);
+    else if (route.tab === 'flights') html = viewFlights();
+    else if (route.tab === 'rail') html = viewRail();
+    else if (route.tab === 'tracks') html = viewTracks();
+    else html = viewHome();
+
+    view.innerHTML = html;
+    document.getElementById('tabs').innerHTML = renderTabs(route.tab);
+
+    const title = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
+      route.tab
+    ];
+    document.getElementById('topTitle').textContent = title;
+
+    const back = document.getElementById('back');
+    back.style.display = route.detail ? 'flex' : 'none';
+
+    if (route.detail) mountTrackMap(route.trackId);
+
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 事件委托                                                            */
+  /* ------------------------------------------------------------------ */
+
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-chip]');
+    if (chip) {
+      state[chip.dataset.chip] = chip.dataset.value;
+      render();
+      return;
+    }
+
+    const fold = e.target.closest('[data-fold]');
+    if (fold) {
+      fold.closest('.fold').classList.toggle('is-open');
+      return;
+    }
+
+    const trackBtn = e.target.closest('[data-track]');
+    if (trackBtn) {
+      location.hash = `#/track/${encodeURIComponent(trackBtn.dataset.track)}`;
+      return;
+    }
+
+    if (e.target.closest('#back')) {
+      history.back();
+    }
+  });
+
+  window.addEventListener('hashchange', render);
+
+  function boot() {
+    const el = document.getElementById('boot');
+    try {
+      render();
+      if (el && el.parentNode) el.remove();
+    } catch (err) {
+      console.error(err);
+      if (el) {
+        el.innerHTML =
+          '<div style="max-width:420px;margin:0 auto">' +
+          '<b style="color:#e5484d">页面渲染出错</b>' +
+          '<div style="margin-top:8px;font-size:13px">' +
+          esc(String((err && err.message) || err)) +
+          '</div></div>';
+      }
+    }
+  }
+
+  boot();
+})();

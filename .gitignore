@@ -1,0 +1,18 @@
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+
+# 调试与日志
+*.log
+_diag*.html
+_diag*.mjs
+
+# 依赖（本项目理论用不到，防手滑装了东西）
+node_modules/
+
+# 令牌绝对不能进仓库 —— README 里有说明
+.env
+.env.*
+*.token
