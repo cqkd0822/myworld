@@ -131,5 +131,36 @@ python -m http.server 8000
    不是配置失误。防护手段是在 [腾讯位置服务控制台](https://lbs.qq.com/dev/console/application/mine)
    给这个 key **配置域名白名单**（只允许你自己的域名调用），并把产品类型
    限定为 JavaScript API GL、设置配额上限。key 换了只改 `assets/data/site.js`。
-2. **GitHub token 不要提交进仓库**。它只在本机配置 remote 时用到一次，
-   仓库里没有任何它的痕迹。用完建议到 GitHub 设置里吊销。
+2. **推送用 SSH Deploy Key，不用 Personal Access Token**。
+   Deploy key 只对一个仓库生效，比 PAT 的作用域小得多。
+
+   密钥对在本机 `~/.ssh/myworld_deploy`（私钥）和 `~/.ssh/myworld_deploy.pub`
+   （公钥）。**私钥永远不要提交、不要外发**——仓库里没有任何它的痕迹。
+   公钥要贴到 GitHub 仓库的 Settings → Deploy keys，并勾上 **Allow write access**，
+   否则只能拉不能推。
+
+   本仓库的 `.git/config` 里已经配好了指向这把私钥：
+
+   ```bash
+   git config core.sshCommand "ssh -i ~/.ssh/myworld_deploy -o IdentitiesOnly=yes"
+   ```
+
+   `IdentitiesOnly=yes` 是必要的：不加的话 SSH 会先把 agent 里的其他密钥
+   挨个试一遍，多仓库多密钥时容易串号、也会触发 GitHub 的失败次数限制。
+
+   验证是否接通（成功时会打印 `Hi cqkd0822/myworld! You've successfully
+   authenticated`，且**不会**给你 shell）：
+
+   ```bash
+   ssh -T -i ~/.ssh/myworld_deploy git@github.com
+   ```
+
+   如果网络封了 22 端口，GitHub 在 443 上也有同一个 SSH 服务，换这个：
+
+   ```bash
+   ssh -T -i ~/.ssh/myworld_deploy -p 443 git@ssh.github.com
+   ```
+
+   要换机器时，把 `myworld_deploy`（私钥）安全地拷过去，或重新生成一对、
+   在 GitHub 上把旧的删掉。同一把公钥**不能**添加到两个仓库
+   （GitHub 会报 `Key is already in use`），每个仓库各生成一对。
