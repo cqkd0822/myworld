@@ -342,5 +342,5 @@
     return { fallback };
   }
 
-  M.map = { renderTrack, svgPreview, svgProfile, destroy };
+  M.map = { renderTrack, svgPreview, svgProfile, destroy, loadApi };
 })();

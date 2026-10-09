@@ -141,6 +141,12 @@ a {
   min-height: 70vh;
 }
 
+/* 航迹图铺满一屏，不需要再给底部标签栏留滚动余量 */
+.view.is-mapview {
+  padding-bottom: 0;
+  min-height: 0;
+}
+
 .tabbar {
   position: fixed;
   left: 0;
@@ -1155,3 +1161,297 @@ a {
     transition: none !important;
   }
 }
+
+/* ==========================================================================
+   航迹图 —— 航旅纵横风格的飞行 / 铁路轨迹地图
+   深色是这里的主导色，所以面板、文字都用深色系，不复用页面的浅色变量。
+   ========================================================================== */
+
+.tmap {
+  position: relative;
+  /* 顶栏和底栏之间正好铺满一屏：这就是航迹图全部的可用空间 */
+  height: calc(
+    100vh - var(--topbar-h) - var(--tabbar-h) - env(safe-area-inset-bottom) -
+      env(safe-area-inset-top)
+  );
+  min-height: 420px;
+  background: #0b1220;
+  overflow: hidden;
+}
+
+.tmap__host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* 底图没起来之前的兜底画面，以及加载提示 */
+.tmap__offline {
+  position: absolute;
+  inset: 0;
+}
+
+.tmap__offline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tmap__hint {
+  position: absolute;
+  top: 54px;
+  left: 12px;
+  z-index: 6;
+  background: rgba(15, 23, 42, 0.88);
+  color: #cbd5e1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  max-width: calc(100% - 24px);
+}
+
+/* 列表 / 航迹图 切换，悬浮在地图左上角 */
+.tmap__switch {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+}
+
+/* ---- 分段切换（列表 | 航迹图）---- */
+
+.vtoggle {
+  display: inline-flex;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border-radius: 999px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vtoggle__btn {
+  border: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  min-height: 30px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vtoggle__btn.is-active {
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+/* 列表页顶部的切换条：浅色环境，配色反过来 */
+.listhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.listhead .vtoggle {
+  background: #e6e9f0;
+  border-color: transparent;
+}
+
+.listhead .vtoggle__btn {
+  color: var(--ink-2);
+}
+
+.listhead .vtoggle__btn.is-active {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.16);
+}
+
+.listhead__hint {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* ---- 底部悬浮面板：时间轴 + 统计 ---- */
+
+.tmap__panels {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.tmap__panels > * {
+  pointer-events: auto;
+}
+
+.tmap__timeline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 9px 14px;
+}
+
+.tmap__tlabel {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+  min-width: 56px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.tmap__track {
+  flex: 1;
+  position: relative;
+  padding-bottom: 7px;
+}
+
+/* 滑块本身：细轨道 + 白色圆点，仿航旅纵横的年份时间轴 */
+.tmap__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: none;
+  margin: 0;
+  cursor: pointer;
+}
+
+.tmap__slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 2px;
+}
+
+.tmap__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid var(--tmap-accent, #ffc247);
+  margin-top: -7px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.tmap__slider::-moz-range-track {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 2px;
+}
+
+.tmap__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid var(--tmap-accent, #ffc247);
+}
+
+/* 刻度：每一年一道竖线 */
+.tmap__ticks {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 4px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.tmap__ticks i {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.tmap__allbtn {
+  border: 0;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  min-height: 30px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tmap__allbtn:active {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.tmap__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 4px;
+}
+
+.tmap__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.tmap__stat b {
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.tmap__stat span {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+}
+
+/* 桌面端：和正文一样收窄居中，避免地图在大屏上铺满整行显得空旷 */
+@media (min-width: 700px) {
+  .tmap {
+    max-width: 680px;
+    margin: 0 auto;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    height: calc(100vh - var(--topbar-h) - var(--tabbar-h) - 32px);
+    min-height: 480px;
+    box-shadow: var(--shadow);
+  }
+
+  .tmap__panels {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+/* 腾讯地图自带控件的深色适配 */
+.tmap__host .gm-style-ct,
+.tmap__host canvas {
+  outline: none;
+}
+

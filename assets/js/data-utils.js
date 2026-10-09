@@ -13,6 +13,7 @@
   /* ------------------------------------------------------------------ */
 
   const CITY_KEYS = Object.keys(M.cityCoords || {}).sort((a, b) => b.length - a.length);
+  const ALIAS_KEYS = Object.keys(M.stationCity || {}).sort((a, b) => b.length - a.length);
 
   /**
    * 「鄂尔多斯伊金霍洛T2」→ 城市 鄂尔多斯 / 机场 伊金霍洛 / 航站楼 T2
@@ -50,9 +51,34 @@
     return { raw: original, city: city || name, airport, terminal, note };
   }
 
+  /**
+   * 「汉口站」→ 城市 武汉 / 站名 汉口
+   * 「南昌西站」→ 城市 南昌 / 站名 西
+   *
+   * 火车站名比机场名更不讲道理：有以城市命名的（南昌西），也有完全
+   * 看不出归属的（汉口、沙坪坝、龙嘉、香港西九龙）。所以先查
+   * airports.js 里的 stationCity 别名表，再退回城市最长前缀匹配。
+   */
+  function parseStationName(raw) {
+    const original = String(raw || '').trim();
+    // 掉尾缀「站」即可，「北/南/东/西」要留着——太湖南、武穴北本身就是区分信息
+    const name = original.replace(/火车站$/, '').replace(/站$/, '');
+
+    for (const key of ALIAS_KEYS) {
+      if (name.startsWith(key)) {
+        return { raw: original, city: M.stationCity[key], station: name.slice(key.length) };
+      }
+    }
+    for (const key of CITY_KEYS) {
+      if (name.startsWith(key)) {
+        return { raw: original, city: key, station: name.slice(key.length) };
+      }
+    }
+    return { raw: original, city: name, station: '' };
+  }
+
   /** 两个城市之间的直线距离（公里）。没查到坐标返回 null。 */
-  function cityDistanceKm(a, b) {
-    const p = M.cityCoords[a];
+  function cityDistanceKm(a, b) {    const p = M.cityCoords[a];
     const q = M.cityCoords[b];
     if (!p || !q) return null;
 
@@ -274,6 +300,8 @@
       .map((r) => {
         const [id, dateRaw, train, from, to, seat, note] = r;
         const prefix = String(train || '').charAt(0).toUpperCase();
+        const fromCity = parseStationName(from).city;
+        const toCity = parseStationName(to).city;
         return {
           id,
           date: parseDate(dateRaw),
@@ -283,6 +311,10 @@
           prefix,
           from,
           to,
+          /* 航迹图用：站名 → 城市，以及城市间直线距离 */
+          fromCity,
+          toCity,
+          distanceKm: cityDistanceKm(fromCity, toCity),
           seat,
           seatKind: seatKind(seat),
           note: note || '',
@@ -389,6 +421,7 @@
 
   M.util = {
     parseAirportName,
+    parseStationName,
     cityDistanceKm,
     parseClock,
     blockMinutes,

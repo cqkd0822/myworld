@@ -54,6 +54,10 @@
     flightYear: 'all',
     flightAirline: 'all',
     railYear: 'all',
+    // 「列表 | 航迹图」两种视图。航迹图是全局状态：切到别的 tab 再回来，
+    // 你刚才看的还是航迹图，而不是被悄悄重置回列表。
+    flightView: 'list',
+    railView: 'list',
   };
 
   /* ------------------------------------------------------------------ */
@@ -238,6 +242,98 @@
       .join('')}</div>`;
   }
 
+  /** 「列表 | 航迹图」分段切换。 */
+  function viewToggle(kind, active) {
+    return `<div class="vtoggle" role="tablist">
+      <button class="vtoggle__btn${active === 'list' ? ' is-active' : ''}" data-tview="${kind}:list">列表</button>
+      <button class="vtoggle__btn${active === 'map' ? ' is-active' : ''}" data-tview="${kind}:map">航迹图</button>
+    </div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 航迹图                                                              */
+  /* ------------------------------------------------------------------ */
+
+  /** 飞行：底部统计条的四个数字 */
+  function flightStats(list) {
+    const cities = new Set();
+    let km = 0;
+    list.forEach((f) => {
+      cities.add(f.from.city);
+      cities.add(f.to.city);
+      km += f.distanceKm || 0;
+    });
+    return [
+      { n: cities.size, label: '城市' },
+      { n: list.length, label: '航段' },
+      { n: (km / 10000).toFixed(1) + '万', label: '公里' },
+      { n: new Set(list.map((f) => f.airline)).size, label: '航司' },
+    ];
+  }
+
+  /** 铁路：同样四个数字，但「车站」比「车次种类」更有信息量 */
+  function railStats(list) {
+    const cities = new Set();
+    const stations = new Set();
+    let km = 0;
+    list.forEach((r) => {
+      cities.add(r.fromCity);
+      cities.add(r.toCity);
+      stations.add(r.from);
+      stations.add(r.to);
+      km += r.distanceKm || 0;
+    });
+    return [
+      { n: cities.size, label: '城市' },
+      { n: list.length, label: '车次' },
+      { n: (km / 10000).toFixed(1) + '万', label: '公里' },
+      { n: stations.size, label: '车站' },
+    ];
+  }
+
+  function routeMapView(kind) {
+    const isFlight = kind === 'flights';
+    const accent = isFlight ? '#ffc247' : '#3fd6c5';
+    return `<div class="tmap" style="--tmap-accent:${accent}">
+      <div class="tmap__host" id="tmapHost"></div>
+      <div class="tmap__switch">${viewToggle(kind, 'map')}</div>
+    </div>`;
+  }
+
+  /**
+   * 把航迹图挂到 #tmapHost 上。
+   * 年份筛选沿用列表页的 state，所以你在航迹图里拖到 2024，
+   * 切回列表看到的也是 2024——两边是同一份筛选状态。
+   */
+  function mountRouteMap(kind) {
+    const host = document.getElementById('tmapHost');
+    if (!host) return;
+
+    const isFlight = kind === 'flights';
+    const accent = isFlight ? '#ffc247' : '#3fd6c5';
+
+    M.routemap.render({
+      container: host,
+      kind,
+      accent,
+      years: isFlight ? flightYears.slice().sort((a, b) => a - b) : railYears.slice().sort((a, b) => a - b),
+      year: isFlight ? state.flightYear : state.railYear,
+      load(year) {
+        let list = isFlight ? flights : rails;
+        if (year !== 'all') {
+          list = list.filter((x) => x.date && x.date.year === Number(year));
+        }
+        // 同步回全局状态，列表页和航迹图共用同一份筛选
+        if (isFlight) state.flightYear = String(year);
+        else state.railYear = String(year);
+
+        return isFlight
+          ? { items: list, stats: flightStats(list) }
+          : { items: list, stats: railStats(list) };
+      },
+    });
+  }
+
   /* ------------------------------------------------------------------ */
   /* 视图：概览                                                          */
   /* ------------------------------------------------------------------ */
@@ -399,7 +495,13 @@
     const km = list.reduce((s, f) => s + (f.distanceKm || 0), 0);
     const fare = list.reduce((s, f) => s + (f.price || 0), 0);
 
+    // 航迹图模式：整页都是地图，筛选（年份）由地图上的时间轴接管
+    if (state.flightView === 'map') return routeMapView('flights');
+
     return `<div class="wrap">
+  <div class="listhead">
+    ${viewToggle('flights', 'list')}
+  </div>
   <div class="filters">
     ${chipRow(
       '年份',
@@ -435,7 +537,12 @@
     const seatKinds = new Map();
     list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
 
+    if (state.railView === 'map') return routeMapView('rail');
+
     return `<div class="wrap">
+  <div class="listhead">
+    ${viewToggle('rail', 'list')}
+  </div>
   <div class="filters">
     ${chipRow(
       '年份',
@@ -629,8 +736,20 @@
     const hash = location.hash || '#/';
     const m = hash.match(/^#\/track\/(.+)$/);
     if (m) return { tab: 'tracks', trackId: decodeURIComponent(m[1]), detail: true };
-    if (hash.startsWith('#/flights')) return { tab: 'flights' };
-    if (hash.startsWith('#/rail')) return { tab: 'rail' };
+
+    // #/flights/map 这种深链：既是可收藏的入口，也让自动化截图能直达航迹图
+    const mapView = /\/map$/.test(hash);
+    const listView = /\/list$/.test(hash);
+    if (hash.startsWith('#/flights')) {
+      if (mapView) state.flightView = 'map';
+      else if (listView) state.flightView = 'list';
+      return { tab: 'flights' };
+    }
+    if (hash.startsWith('#/rail')) {
+      if (mapView) state.railView = 'map';
+      else if (listView) state.railView = 'list';
+      return { tab: 'rail' };
+    }
     if (hash.startsWith('#/tracks')) return { tab: 'tracks' };
     return { tab: 'home' };
   }
@@ -651,6 +770,7 @@
       M.map.destroy();
       mapRef = null;
     }
+    M.routemap.destroy();
 
     let html;
     if (route.detail) html = viewTrackDetail(route.trackId);
@@ -662,6 +782,12 @@
     view.innerHTML = html;
     document.getElementById('tabs').innerHTML = renderTabs(route.tab);
 
+    // 航迹图占满一屏，列表页那条「给底部标签栏留空间」的 padding 就多余了
+    const mapMode =
+      (route.tab === 'flights' && state.flightView === 'map') ||
+      (route.tab === 'rail' && state.railView === 'map');
+    view.classList.toggle('is-mapview', Boolean(mapMode));
+
     const title = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
       route.tab
     ];
@@ -671,6 +797,8 @@
     back.style.display = route.detail ? 'flex' : 'none';
 
     if (route.detail) mountTrackMap(route.trackId);
+    else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
+    else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
 
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -680,6 +808,15 @@
   /* ------------------------------------------------------------------ */
 
   document.addEventListener('click', (e) => {
+    const tv = e.target.closest('[data-tview]');
+    if (tv) {
+      const [kind, mode] = tv.dataset.tview.split(':');
+      if (kind === 'flights') state.flightView = mode;
+      else state.railView = mode;
+      render();
+      return;
+    }
+
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       state[chip.dataset.chip] = chip.dataset.value;
