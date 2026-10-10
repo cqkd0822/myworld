@@ -342,6 +342,16 @@
   /* 汇总统计                                                            */
   /* ------------------------------------------------------------------ */
 
+  /** 轨迹 → 城市：先按名字最长前缀匹配城市词典，再退回 region 的「省 · 市」。 */
+  function trackCity(t) {
+    const parts = String(t.region || '').split('·').map((x) => x.trim());
+    for (const src of [t.name, parts[1], parts[0]]) {
+      const v = String(src || '');
+      for (const key of CITY_KEYS) if (v.startsWith(key)) return key;
+    }
+    return null;
+  }
+
   function computeOverview(flights, rails, tracks) {
     const fareList = flights.filter((f) => f.price != null);
     const fareSum = fareList.reduce((s, f) => s + f.price, 0);
@@ -362,6 +372,21 @@
       const key = [f.from.city, f.to.city].sort().join(' ⇄ ');
       routes.set(key, (routes.get(key) || 0) + 1);
     });
+
+    // 游历城市：航班 + 铁路 + 徒步三源并集，按到访次数排序
+    const cityStats = new Map();
+    const bump = (city, src) => {
+      if (!city) return;
+      const o = cityStats.get(city) || { rail: 0, flight: 0, track: 0 };
+      o[src] += 1;
+      cityStats.set(city, o);
+    };
+    flights.forEach((f) => { bump(f.from.city, 'flight'); bump(f.to.city, 'flight'); });
+    rails.forEach((r) => { bump(r.fromCity, 'rail'); bump(r.toCity, 'rail'); });
+    tracks.forEach((t) => bump(trackCity(t), 'track'));
+    const citiesAll = [...cityStats.entries()]
+      .map(([city, o]) => [city, o.rail + o.flight + o.track, o])
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'));
 
     const withDelay = flights.filter((f) => f.delay != null);
     const onTime = withDelay.filter((f) => f.delay <= 0).length;
@@ -392,6 +417,8 @@
       fareCount: fareList.length,
       fareAvg: fareList.length ? fareSum / fareList.length : 0,
       cities: [...cities].sort(),
+      citiesAll,
+      cityStats,
       airlines: [...airlines.entries()].sort((a, b) => b[1] - a[1]),
       routes: [...routes.entries()].sort((a, b) => b[1] - a[1]),
       onTime,

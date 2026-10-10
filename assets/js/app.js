@@ -58,7 +58,7 @@
     // 先看到成果，再往下翻明细。切到别的 tab 再回来，状态不会被打回原形。
     flightView: 'stats',
     railView: 'stats',
-    trackView: 'stats',
+    trackView: 'list',
   };
 
   /* ------------------------------------------------------------------ */
@@ -442,9 +442,9 @@
         <div class="stat__foot">按城市间直线距离估算，约绕地球 ${(overview.distanceSum / 40075).toFixed(1)} 圈</div>
       </div>
       <div class="stat">
-        <div class="stat__label">到访城市</div>
-        <div class="stat__value">${overview.cities.length}<small>座</small></div>
-        <div class="stat__foot">铁路经停 ${overview.stationCount} 个车站</div>
+        <div class="stat__label">游历城市</div>
+        <div class="stat__value">${overview.citiesAll.length}<small>座</small></div>
+        <div class="stat__foot">航班 + 铁路 + 徒步三源并集 · 铁路经停 ${overview.stationCount} 站</div>
       </div>
       <div class="stat">
         <div class="stat__label">已知票价合计</div>
@@ -458,6 +458,25 @@
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
         <div class="stat__foot">${overview.onTime} 段准点或提前 / 共 ${overview.flightCount} 段 · 口径 delay≤0</div>
       </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">游历城市</h2>
+      <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数</span>
+    </div>
+    <div class="chips">
+      ${overview.citiesAll
+        .map(([city, total, o]) => {
+          const parts = [
+            o.flight ? `飞${o.flight}` : '',
+            o.rail ? `铁${o.rail}` : '',
+            o.track ? `徒${o.track}` : '',
+          ].filter(Boolean).join(' · ');
+          return `<span class="chip"><b>${esc(city)}</b><small>${total} 次${parts ? ' · ' + parts : ''}</small></span>`;
+        })
+        .join('')}
     </div>
   </section>
 
@@ -639,14 +658,10 @@
       return '<div class="wrap"><div class="empty">还没有轨迹。把 GPX 放进 tools/source/ 再跑一次构建脚本。</div></div>';
     }
 
-    if (state.trackView === 'stats') {
-      return statsPage('tracks', 'stats', M.stats.trackView(tracks));
-    }
-
     const cards = tracks
       .map((t) => {
         const s = t.stats;
-        const pace = U.paceMinPerKm(s.durationSec, s.distanceKm);
+        const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(1) : null;
         return `<button class="track" data-track="${esc(t.id)}">
   <div class="track__head">
     <div class="track__pill" style="background:${t.color}">${icon.pin}</div>
@@ -661,8 +676,8 @@
   <div class="track__stats">
     <div class="track__stat"><b>${s.distanceKm}</b><span>公里</span></div>
     <div class="track__stat"><b>${U.formatNumber(s.ascentM)}</b><span>爬升 m</span></div>
-    <div class="track__stat"><b>${pace || (s.durationSec ? U.formatSeconds(s.durationSec) : '—')}</b><span>${
-          pace ? '配速 /km' : '用时'
+    <div class="track__stat"><b>${mv || (s.durationSec ? U.formatSeconds(s.durationSec) : '—')}</b><span>${
+          mv ? 'km/h 移动' : '用时'
         }</span></div>
   </div>
 </button>`;
@@ -671,7 +686,7 @@
 
     return `<div class="wrap">
   <div class="listhead">
-    ${viewToggle('tracks', 'list', ['stats', 'list'])}
+    ${viewToggle('tracks', 'list', ['list'])}
   </div>
   <div class="section__head" style="margin-top:16px">
     <h2 class="section__title">${tracks.length} 条轨迹</h2>
@@ -695,6 +710,7 @@
 
     const s = t.stats;
     const pace = U.paceMinPerKm(s.durationSec, s.distanceKm);
+    const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(2) : null;
 
     return `<div class="wrap">
   <div id="mapHost" class="detail__map" style="margin-top:16px"></div>
@@ -717,6 +733,9 @@
       ${
         s.durationSec
           ? `<div><div class="kv__k">用时</div><div class="kv__v">${U.formatSeconds(s.durationSec)}</div></div>
+                ${mv ? `<div><div class="kv__k">移动时间</div><div class="kv__v">${U.formatSeconds(s.movingTimeSec)}</div></div>
+                <div><div class="kv__k">移动速度</div><div class="kv__v">${mv} km/h</div></div>
+                <div><div class="kv__k">休息</div><div class="kv__v">${U.formatSeconds(s.restTimeSec)}</div></div>` : ''}
              <div><div class="kv__k">平均配速</div><div class="kv__v">${pace || '—'}<small>/km</small></div></div>`
           : ''
       }

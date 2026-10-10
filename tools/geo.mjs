@@ -317,6 +317,9 @@ export function smoothElevation(segments, window = 7) {
  *
  * 距离只在段内累加，段与段之间不连线（段间没走路）。
  */
+/** 相邻点间隔超过它即视为休息（午餐 / 过夜 / 暂停），整段剔除。10 分钟对徒步是稳妥阈值。 */
+const REST_GAP_MS = 10 * 60 * 1000;
+
 export function trackStats(segments, eleThreshold = 10) {
   let distance = 0;
   let ascent = 0;
@@ -324,6 +327,8 @@ export function trackStats(segments, eleThreshold = 10) {
   let minEle = Infinity;
   let maxEle = -Infinity;
   let pointCount = 0;
+  let movingTimeMs = 0;
+  let movingDistanceM = 0;
 
   for (const seg of segments) {
     pointCount += seg.length;
@@ -333,6 +338,15 @@ export function trackStats(segments, eleThreshold = 10) {
     for (let i = 0; i < seg.length; i++) {
       const p = seg[i];
       if (i > 0) distance += haversine(seg[i - 1], p);
+      // 去休息：相邻点时间间隔 <= REST_GAP 才算「在移动」，
+      // 超过的（ lunch / 过夜 / 手表暂停）整段剔除，不计入移动时间与移动距离。
+      if (i > 0 && p.time && seg[i - 1].time) {
+        const dt = Date.parse(p.time) - Date.parse(seg[i - 1].time);
+        if (dt >= 0 && dt <= REST_GAP_MS) {
+          movingTimeMs += dt;
+          movingDistanceM += haversine(seg[i - 1], p);
+        }
+      }
 
       if (typeof p.ele === 'number') {
         if (p.ele < minEle) minEle = p.ele;
@@ -363,6 +377,12 @@ export function trackStats(segments, eleThreshold = 10) {
     segmentCount: segments.length,
     startTime: all.find((p) => p.time)?.time,
     endTime: [...all].reverse().find((p) => p.time)?.time,
+    // 去休息后的近似移动指标：跨天 / 含过夜的徒步用它算速度，
+    // 不再被 12 小时的「总用时」稀释成 1 km/h。
+    movingTimeSec: Math.round(movingTimeMs / 1000),
+    movingDistanceKm: movingDistanceM / 1000,
+    movingSpeedKmh: movingTimeMs > 0 ? (movingDistanceM / 1000) / (movingTimeMs / 3600000) : 0,
+    restTimeSec: Math.max(0, Math.round((((all[all.length - 1]?.time ? Date.parse(all[all.length - 1].time) : 0) - (all[0]?.time ? Date.parse(all[0].time) : 0)) - movingTimeMs) / 1000)),
   };
 }
 

@@ -492,6 +492,17 @@ a {
   font-weight: 600;
 }
 
+.chip b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.chip small {
+  color: var(--ink-3);
+  margin-left: 6px;
+  font-size: 11px;
+}
+
 .chips__label {
   font-size: 11px;
   color: var(--ink-3);
