@@ -86,6 +86,7 @@
   const KIND_TAG = {
     race: ['已完赛', 'tag--ok'],
     hike: ['徒步', 'tag--ok'],
+    run: ['越野跑', 'tag--ok'],
     course: ['赛事路线', 'tag--neutral'],
   };
 

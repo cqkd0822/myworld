@@ -325,7 +325,7 @@
                 anchor: { x: 13, y: 33 },
                 src: pinDataUri('#e5484d'),
               }),
-              // 补给点用小实心点。TOR330 有 81 个补给点，16px 的白心圆环
+              // 补给点用小实心点。补给点上百的越野赛道上，16px 的白心圆环
               // 会把轨迹线盖成一串「空心项链」，线本身反而看不见。
               waypoint: new TMap.MarkerStyle({
                 width: 8,

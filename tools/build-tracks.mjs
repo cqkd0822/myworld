@@ -12,7 +12,7 @@
  *   4. 输出 assets/data/tracks.js（含坐标、海拔剖面、航点），
  *      以及 gpx/ 下的精简版 GPX 供下载
  *
- * 为什么不先平滑再算距离：实测 TOR330 那条 337 公里的赛道，5 点滑动平均
+ * 为什么不先平滑再算距离：实测一条 337 公里的越野赛道（TOR330，2026-10 已下线），5 点滑动平均
  * 会把距离压到 310 公里（少 8%）——平滑在盘山发卡弯处抄了近道。原始 GPS
  * 抖动造成的虚高通常只有 1~2%，比抄近道的低估小得多，所以宁可不平滑。
  *
@@ -52,7 +52,7 @@ const DATA_OUT = join(ROOT, 'assets', 'data', 'tracks.js');
  *                300 公里级的长轨迹用 3 米会产生上万个点，12 米在整条赛道
  *                的尺度下连一个像素都占不到，纯属浪费体积。
  * eleThresholdM —— 累计爬升时的起伏过滤阈值（米）。低于它的高度变化视为
- *                抖动丢弃。10 米是个稳妥的默认值：TOR330 用 10 米算出
+ *                抖动丢弃。10 米是个稳妥的默认值：同一条赛道用 10 米算出
  *                24258 米爬升，与官方公布的约 24000 米吻合。
  */
 const MANIFEST = [
@@ -65,17 +65,6 @@ const MANIFEST = [
     kind: 'race',
     color: '#1B6FF0',
     toleranceM: 3,
-    eleThresholdM: 10,
-  },
-  {
-    id: 'tor330-2026',
-    file: 'TOR330-CERT-2026.gpx',
-    name: 'TOR des Géants 330',
-    date: '2026-09',
-    region: '意大利 · 奥斯塔谷',
-    kind: 'course',
-    color: '#D9482F',
-    toleranceM: 12,
     eleThresholdM: 10,
   },
   /* —— 2025 年徒步 32 条：企业微信收件的 GPX，2026-10 批量入库 —— */
@@ -428,6 +417,107 @@ const MANIFEST = [
     region: '浙江 · 湖州',
     kind: 'hike',
     color: '#a3e635',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+
+  /* —— 2025-09~12 第二批：五台山顺朝两日、军嶂古道越野跑等 9 条（2026-10 入库） —— */
+  {
+    id: '2025-09-29-xinzhou-wutaishan-1',
+    file: '2025-09-29-xinzhou-wutaishan-1.gpx',
+    name: '忻州五台山顺朝 · 第一天',
+    date: '2025-09-29',
+    region: '山西 · 忻州',
+    kind: 'hike',
+    color: '#38bdf8',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-09-30-xinzhou-wutaishan-2',
+    file: '2025-09-30-xinzhou-wutaishan-2.gpx',
+    name: '忻州五台山顺朝 · 第二天',
+    date: '2025-09-30',
+    region: '山西 · 忻州',
+    kind: 'hike',
+    color: '#fb7185',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-10-07-hangzhou-changle',
+    file: '2025-10-07-hangzhou-changle.gpx',
+    name: '杭州长乐林场',
+    date: '2025-10-07',
+    region: '浙江 · 杭州',
+    kind: 'hike',
+    color: '#a3e635',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-11-15-pingxiang-wugongshan-full',
+    file: '2025-11-15-pingxiang-wugongshan-full.gpx',
+    name: '萍乡武功山反穿',
+    date: '2025-11-15',
+    region: '江西 · 萍乡',
+    kind: 'hike',
+    color: '#f97316',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-11-23-hangzhou-xingmeijian',
+    file: '2025-11-23-hangzhou-xingmeijian.gpx',
+    name: '杭州富阳杏梅尖',
+    date: '2025-11-23',
+    region: '浙江 · 杭州',
+    kind: 'hike',
+    color: '#2dd4bf',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-11-29-hangzhou-biaoyixian',
+    file: '2025-11-29-hangzhou-biaoyixian.gpx',
+    name: '杭州标毅线',
+    date: '2025-11-29',
+    region: '浙江 · 杭州',
+    kind: 'hike',
+    color: '#e879f9',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-12-07-wuxi-junzhang',
+    file: '2025-12-07-wuxi-junzhang.gpx',
+    name: '无锡军嶂古道越野跑',
+    date: '2025-12-07',
+    region: '江苏 · 无锡',
+    kind: 'run',
+    color: '#94a3b8',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-12-14-xuancheng-tiejiangfeng',
+    file: '2025-12-14-xuancheng-tiejiangfeng.gpx',
+    name: '宣城铁匠峰',
+    date: '2025-12-14',
+    region: '安徽 · 宣城',
+    kind: 'hike',
+    color: '#1B6FF0',
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
+    id: '2025-12-31-huangshan-newyear',
+    file: '2025-12-31-huangshan-newyear.gpx',
+    name: '黄山跨年徒步',
+    date: '2025-12-31',
+    region: '安徽 · 黄山',
+    kind: 'hike',
+    color: '#D9482F',
     toleranceM: 4,
     eleThresholdM: 10,
   },

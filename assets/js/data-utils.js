@@ -140,6 +140,10 @@
   function paceMinPerKm(sec, km) {
     if (sec == null || !km) return null;
     const per = sec / 60 / km;
+    // 平均慢于 60'/km（<1 km/h）基本意味着记录里含过夜或长停顿
+    // （黄山跨年那条跨了 22.5 小时），这时「配速」是误导数字，
+    // 返回 null 让页面改显示总用时
+    if (per >= 60) return null;
     const m = Math.floor(per);
     const s = Math.round((per - m) * 60);
     return `${m}'${String(s).padStart(2, '0')}"`;
