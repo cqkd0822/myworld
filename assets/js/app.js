@@ -1,7 +1,7 @@
 /**
  * 应用主逻辑 —— 路由 + 四个视图的渲染。
  *
- * 没有框架，也不需要：数据是静态的（100 段航班 + 49 段铁路 + 2 条轨迹，
+ * 没有框架，也不需要：数据是静态的（100 段航班 + 51 段铁路 + 2 条轨迹，
  * 全量序列化后不到 130 KB），页面用模板字符串拼出来就行。
  * 这样整个站零依赖、零构建，鼠标双击 index.html 就能看。
  *
@@ -496,6 +496,18 @@
     </div>
   </section>
 
+  <section class="section">
+    <div class="section__head"><h2 class="section__title">导出数据</h2></div>
+    <p class="export__hint">
+      全站行程的机器可读副本：JSON 与 assets/data/ 下的原始数组同构，适合备份或自己再分析；
+      CSV 带 UTF-8 BOM，Excel 直接打开中文不乱码。
+    </p>
+    <div class="export__btns">
+      <button class="btn" type="button" data-export="json">${icon.download} JSON</button>
+      <button class="btn" type="button" data-export="csv">${icon.download} CSV</button>
+    </div>
+  </section>
+
   <p class="footnote">
     飞行里程按城市间直线距离估算（民航实际航路比直线长 5%~15%，所以这是个下界）。
     爬升按 10 米阈值过滤高度抖动后累加，与其他工具的数字天然会有差异。
@@ -860,6 +872,81 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 数据导出（JSON / CSV）                                               */
+  /* ------------------------------------------------------------------ */
+
+  /** CSV 单元格转义：含逗号/引号/换行就包引号，内部引号翻倍 */
+  function csvCell(v) {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function csvBlock(title, header, rows) {
+    return [
+      `# ${title}`,
+      header.map(csvCell).join(','),
+      ...rows.map((r) => r.map(csvCell).join(',')),
+      '',
+    ].join('\n');
+  }
+
+  function exportText(kind) {
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (kind === 'json') {
+      const payload = {
+        site: M.site.title,
+        generatedAt: new Date().toISOString(),
+        note: 'flights/rail/railVoided 与 assets/data/*.js 的原始数组同构；tracks 只含统计与补给点，几何见 assets/data/tracks.js',
+        flights: M.flights,
+        rail: M.rail,
+        railVoided: M.railVoided,
+        tracks: tracks.map((t) => ({
+          id: t.id, name: t.name, date: t.date, region: t.region,
+          kind: t.kind, color: t.color, stats: t.stats, waypoints: t.waypoints,
+        })),
+      };
+      return { name: `myworld-${stamp}.json`, mime: 'application/json', text: JSON.stringify(payload, null, 2) };
+    }
+    const text =
+      csvBlock(
+        '航班',
+        ['序号','日期','航空公司','航班号','出发','到达','机型','注册号','计划起飞','计划到达','实际到达','舱位','座位','票价','晚点分钟','直线公里'],
+        flights.map((f) => [
+          f.id, f.dateRaw, f.airline, f.flightNo, f.from.raw, f.to.raw, f.aircraft, f.reg,
+          f.std, f.sta, f.ata, f.cabinRaw || f.cabin, f.seat, f.price, f.delay,
+          f.distanceKm == null ? '' : Math.round(f.distanceKm),
+        ]),
+      ) +
+      csvBlock(
+        '铁路',
+        ['序号','日期','车次','出发站','到达站','出发城市','到达城市','座位','席别','直线公里','备注'],
+        rails.map((r) => [
+          r.id, r.dateRaw, r.train, r.from, r.to, r.fromCity, r.toCity, r.seat, r.seatKind,
+          r.distanceKm == null ? '' : Math.round(r.distanceKm), r.note,
+        ]),
+      ) +
+      csvBlock(
+        '未成行原票',
+        ['车次','出发站','到达站','日期','原因'],
+        voided.map((v) => [v.train, v.from, v.to, v.dateRaw, v.reason]),
+      );
+    return { name: `myworld-${stamp}.csv`, mime: 'text/csv', text: '\uFEFF' + text };
+  }
+
+  function downloadExport(kind) {
+    const { name, mime, text } = exportText(kind);
+    const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* 事件委托                                                            */
   /* ------------------------------------------------------------------ */
 
@@ -884,6 +971,12 @@
     const fold = e.target.closest('[data-fold]');
     if (fold) {
       fold.closest('.fold').classList.toggle('is-open');
+      return;
+    }
+
+    const exp = e.target.closest('[data-export]');
+    if (exp) {
+      downloadExport(exp.dataset.export);
       return;
     }
 
@@ -919,4 +1012,11 @@
   }
 
   boot();
+
+  // 离线缓存：只在 http(s) 下注册；file:// 双击预览没有 SW 也完全不受影响
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      /* 托管环境不让注册就算了，站本身不依赖它 */
+    });
+  }
 })();

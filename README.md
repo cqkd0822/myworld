@@ -2,7 +2,7 @@
 
 个人行程记录站：**航班 / 铁路 / 徒步轨迹** 三类数据，纯静态、零依赖、零构建。
 
-> 数据总量：100 段航班（2015–2026）+ 49 段铁路 + 2 条轨迹。全站深色主题。
+> 数据总量：100 段航班（2015–2026）+ 51 段铁路 + 2 条轨迹。全站深色主题。
 > 全部内容序列化后不到 130 KB，整个仓库（含 2 份原始 GPX）约 7 MB。
 
 ---
@@ -26,6 +26,7 @@
 index.html                  单页应用外壳（hash 路由，四页：概览/飞行/铁路/足迹）
 favicon.svg
 manifest.webmanifest        加到手机主屏幕时的图标与配色
+sw.js                       Service Worker：同源资源 cache-first，断网整站可看
 assets/
   css/style.css             全部样式，移动端优先
   js/data-utils.js          机场/车站名解析、里程/时长计算、汇总统计
@@ -41,6 +42,7 @@ gpx/                        抽稀后的 GPX，供页面「下载」按钮
 tools/
   geo.mjs                   坐标转换 / 抽稀 / 统计的公共实现
   build-tracks.mjs          把 tools/source/*.gpx 编译成 assets/data/tracks.js
+  bump-cache.mjs            用 assets/ 内容哈希重写 index.html 的 ?v=
   source/*.gpx              原始 GPX（手表/赛事导出的原始文件）
 ```
 
@@ -121,6 +123,22 @@ node tools/build-tracks.mjs
 | 坐标系 | GPX 是 WGS-84，腾讯地图是 GCJ-02。转换在**构建期**完成（逐点判断境内外），页面里不再纠偏 |
 
 ---
+
+## 离线与缓存
+
+- **Service Worker（sw.js）**：同源 GET 一律 cache-first，导航请求 network-first、
+  断网回落到缓存里的 index.html。装过一次的机器断网也能整站看（地图底图除外）。
+  只在 http(s) 下注册，`file://` 双击预览不受影响。跨域（腾讯地图瓦片/API）不缓存。
+- **缓存版本号**：index.html 里每个资源的 `?v=` 不再是手改的日期串，而是
+  `assets/` 全量内容的 sha256 前 8 位。**改完任何资源、提交前跑一次**：
+
+  ```bash
+  node tools/bump-cache.mjs
+  ```
+
+  内容不变版本号不变（缓存继续命中），内容一变版本号必变（缓存必然失效）。
+- **导出数据**：概览页底部「导出数据」可下载 JSON（与 assets/data/ 原始数组同构）
+  或 CSV（带 BOM，Excel 打开中文不乱码），做备份或自己再分析用。
 
 ## 本地预览
 
