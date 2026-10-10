@@ -45,6 +45,17 @@
     return Math.min(96, Math.max(4, p));
   }
 
+  /**
+   * 曲线首尾标签的定位。中间点居中，但首点左对齐、末点右对齐——
+   * 全部居中的话末两个点会被 clampPct 挤到同一个位置，
+   * 「2025」「2026」就叠成一个词了（实测截图复现过）。
+   */
+  function edgeAlign(i, n, pct) {
+    if (n > 1 && i === 0) return 'left:0%;transform:none';
+    if (n > 1 && i === n - 1) return 'left:100%;transform:translateX(-100%)';
+    return `left:${clampPct(pct)}%`;
+  }
+
   function rankBars(rows, { unit = '次', max = null } = {}) {
     const top = rows.slice(0, 10);
     const maxV = max || Math.max(1, ...top.map((r) => r.count));
@@ -89,12 +100,12 @@
 
     const dots = xy
       .map(
-        ([x, y], i) => `<span class="st-curve__dot" style="left:${(x / W) * 100}%;top:${y.toFixed(1)}px;border-color:${color}"></span><span class="st-curve__num" style="left:${clampPct((x / W) * 100)}%;top:${(y - 22).toFixed(1)}px">${pts[i].value}</span>`,
+        ([x, y], i) => `<span class="st-curve__dot" style="left:${(x / W) * 100}%;top:${y.toFixed(1)}px;border-color:${color}"></span><span class="st-curve__num" style="${edgeAlign(i, pts.length, (x / W) * 100)};top:${(y - 22).toFixed(1)}px">${pts[i].value}</span>`,
       )
       .join('');
     const labels = xy
       .map(
-        ([x], i) => `<span class="st-curve__x" style="left:${clampPct((x / W) * 100)}%">${esc(pts[i].label)}</span>`,
+        ([x], i) => `<span class="st-curve__x" style="${edgeAlign(i, pts.length, (x / W) * 100)}">${esc(pts[i].label)}</span>`,
       )
       .join('');
 
@@ -158,7 +169,7 @@
 
   function section(title, hint, body) {
     return `<div class="st-sec">
-    <div class="st-sec__head"><h3>${esc(title)}</h3>${hint ? `<span>${esc(hint)}</span>` : ''}</div>
+    <div class="st-sec__head"><h2>${esc(title)}</h2>${hint ? `<span>${esc(hint)}</span>` : ''}</div>
     <div class="st-sec__body">${body}</div>
   </div>`;
   }
@@ -295,7 +306,7 @@
       `<div class="st-inline">
       <div><b>${(s.km / 10000).toFixed(1)}<i>万</i></b><span>公里<br>约绕地球 ${(s.km / 40075).toFixed(1)} 圈</span></div>
       <div><b>${hoursTotal}<i>h</i></b><span>空中时间<br>纯飞行时长合计</span></div>
-      <div><b>${s.delayKnown ? Math.round((s.onTime / s.delayKnown) * 100) : '--'}<i>%</i></b><span>准点率<br>${s.onTime}/${s.delayKnown} 段 ≤15 分</span></div>
+      <div><b>${s.delayKnown ? Math.round((s.onTime / s.delayKnown) * 100) : '--'}<i>%</i></b><span>准点率（宽松）<br>${s.onTime}/${s.delayKnown} 段 ≤15 分</span></div>
     </div>`,
     );
 

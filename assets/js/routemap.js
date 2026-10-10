@@ -182,24 +182,44 @@
    * 后者在部分 GL JS 版本上不渲染，光点却从来没让我们失望过。
    * 白描边保证在深浅两种底图上都读得清。
    */
-  function labeledDotUri(name, color, r, dark) {
+  /**
+   * 带城市名的光点。返回 { uri, w, h, anchorX }。
+   *
+   * 两个坑都在这里踩过：
+   * 1) MarkerStyle 的宽高必须和 SVG 实际尺寸一致，且 TMap 只接受**整数**——
+   *    之前调用方自己另算一遍 w/h 还带 .5，样式被 TMap 判无效后回退默认尺寸，
+   *    城市名就被裁切错位。现在尺寸只在这一处算，round 完回传。
+   * 2) side='left' 把文字画到光点左边，用来给挨得太近的城市（北京/天津、
+   *    成都/重庆）错开标注，否则两个标签直接叠字。
+   */
+  function labeledDotUri(name, color, r, dark, side) {
     const fs = 12;
     const chars = [...String(name)].length;
     const dotR = r + 2.5;
-    const cx = dotR + 3;
-    const cy = Math.max(dotR + 3, fs / 2 + 3);
-    const w = cx + dotR + 5 + chars * fs + 6;
-    const h = cy * 2;
+    const gap = 5;
+    const textW = chars * fs + 6;
+    const w = Math.round(dotR + 3 + dotR + gap + textW);
+    const h = Math.round(Math.max(dotR + 3, fs / 2 + 3) * 2);
+    const cy = h / 2;
+    const left = side === 'left';
+    const cx = left ? w - (dotR + 3) : dotR + 3;
+    const tx = left ? cx - dotR - gap : cx + dotR + gap;
     const fill = dark ? '#f1f5f9' : '#1f2937';
     const halo = dark ? 'rgba(8,15,30,.85)' : '#ffffff';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
 <circle cx="${cx}" cy="${cy}" r="${r + 2.4}" fill="${color}" opacity="0.28"/>
 <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff"/>
 <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.8"/>
-<text x="${cx + r + 5}" y="${cy}" font-size="${fs}" fill="${fill}" stroke="${halo}" stroke-width="3"
+<text x="${tx}" y="${cy}" font-size="${fs}" fill="${fill}" stroke="${halo}" stroke-width="3"
   paint-order="stroke" stroke-linejoin="round" dominant-baseline="central"
+  text-anchor="${left ? 'end' : 'start'}"
   font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">${name}</text></svg>`;
-    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    return {
+      uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+      w,
+      h,
+      anchorX: left ? w - (dotR + 3) : dotR + 3,
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -320,7 +340,10 @@
       // 层级靠透明度和晕光区分，而不是靠加粗——一加粗就变成蜘蛛网。
       // 样式键名必须和几何上的 styleId 完全一致，
       // 少定义一个就会让那一档回退成默认蓝色（踩过这个坑）。
-      const widthFor = [1, 1.4, 2];
+      // TMap 的样式校验只接受整数像素：1.4 会被判「width 属性无效」，
+      // 整档回退成默认蓝色，中间那档层级就没了。三档取 1/2/3，
+      // 细线观感靠透明度和晕光补，不靠加粗。
+      const widthFor = [1, 2, 3];
       const coreStyles = {};
       const glowStyles = {};
       for (let b = 0; b < 3; b++) {
@@ -376,20 +399,24 @@
       const labelStyles = {};
       const labelGeoms = [];
 
+      // 经纬度欧氏距离 3 度（约 300km）以内算「挨太近」：后画的城市把
+      // 文字翻到光点左边，北京/天津、成都/重庆 这类叠字就错开了
+      const placedLabels = [];
       for (const c of cities) {
         const n = visits.get(c);
         const pos = new TMap.LatLng(M.cityCoords[c][0], M.cityCoords[c][1]);
         if (labeled.has(c)) {
+          const [lat, lng] = M.cityCoords[c];
+          const clash = placedLabels.some(([la, lo]) => Math.hypot(la - lat, lo - lng) < 3);
+          placedLabels.push([lat, lng]);
           const r = n >= 8 ? 3 : 2.5;
-          const uri = labeledDotUri(c, accent, r, dark);
-          const w = r + 5.5 + 5 + [...c].length * 12 + 6;
-          const h = Math.max(r * 2 + 6, 19);
+          const lab = labeledDotUri(c, accent, r, dark, clash ? 'left' : 'right');
           const sk = 'n' + labelGeoms.length;
           labelStyles[sk] = new TMap.MarkerStyle({
-            width: w,
-            height: h,
-            anchor: { x: r + 5.5, y: h / 2 },
-            src: uri,
+            width: lab.w,
+            height: lab.h,
+            anchor: { x: lab.anchorX, y: lab.h / 2 },
+            src: lab.uri,
           });
           labelGeoms.push({ id: sk, styleId: sk, position: pos });
         } else {

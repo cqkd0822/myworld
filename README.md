@@ -3,7 +3,7 @@
 个人行程记录站：**航班 / 铁路 / 徒步轨迹** 三类数据，纯静态、零依赖、零构建。
 
 > 数据总量：100 段航班（2015–2026）+ 49 段铁路 + 2 条轨迹。全站深色主题。
-> 全部内容序列化后不到 130 KB，整个仓库（含 2 份原始 GPX）约 5 MB。
+> 全部内容序列化后不到 130 KB，整个仓库（含 2 份原始 GPX）约 7 MB。
 
 ---
 
@@ -117,6 +117,7 @@ node tools/build-tracks.mjs
 | 轨迹距离 | 原始点间距直接累加，**未平滑**。实测平滑会在盘山发卡弯处抄近道（TOR330 被少算 8%） |
 | 累计爬升 | 带海拔阈值过滤（默认 10 米）。不同工具的爬升数天然对不齐，比较时要带上口径 |
 | 轨迹形状 | 抽稀后的原始几何。显示与统计是两条路径：统计用原始几何，画图用抽稀几何 |
+| 准点率 | **两个口径，标签上已注明**：概览页「严格」= 实际到达不晚于计划；飞行统计页「宽松」= 晚点 ≤15 分钟。两者数字不同是口径不同，不是算错 |
 | 坐标系 | GPX 是 WGS-84，腾讯地图是 GCJ-02。转换在**构建期**完成（逐点判断境内外），页面里不再纠偏 |
 
 ---
@@ -139,7 +140,10 @@ python -m http.server 8000
 
 任意静态托管都能直接用，把仓库根目录当网站根目录即可：
 
-- **GitHub Pages**：Settings → Pages → Source 选 `main` / `(root)`。
+- **Cloudflare Pages（本站实际在用）**：构建命令留空，输出目录填 `/`，
+  绑定 GitHub 仓库的 `main` 分支，push 即自动部署。
+- **GitHub Pages**：本站**没有**用（`has_pages: false`）。若要启用：
+  Settings → Pages → Source 选 `main` / `(root)`。
   注意：GitHub 免费账号**只有公开仓库**能用 Pages，私有仓库需要 Pro。
 - **Cloudflare Pages**：构建命令留空，输出目录填 `/`。
 - **Vercel / Netlify**：同样零配置。
@@ -181,6 +185,22 @@ python -m http.server 8000
    ```bash
    ssh -T -i ~/.ssh/myworld_deploy -p 443 git@ssh.github.com
    ```
+
+   **但注意：有些网络（例如公司网）对 SSH 做深度识别，22 和 443 都会在建连后
+   被 reset**——TCP 能连上、`kex_exchange_identification` 阶段被切断，
+   换端口也没用。这种网络下 deploy key 完全不可用，只能走 HTTPS + PAT：
+
+   ```bash
+   git remote set-url origin https://github.com/cqkd0822/myworld.git
+   # fine-grained PAT（只给本仓库 Contents: Read and write）存进钥匙串，
+   # read -rs 不回显、不落盘、不进 history：
+   { printf 'protocol=https\nhost=github.com\nusername=cqkd0822\npassword='; \
+     read -rs TOK; printf '%s\n\n' "$TOK"; } | git credential-osxkeychain store
+   ```
+
+   本机（2026-10 实测）就是这种情况：SSH 双端口被 reset，HTTPS 正常。
+   本机的 deploy key 是 `~/.ssh/id_ed25519_github_myworld`
+   （GitHub 上叫 `myworldkey_mac`，Read/write），换到能出 SSH 的网络即可用。
 
    要换机器时，把 `myworld_deploy`（私钥）安全地拷过去，或重新生成一对、
    在 GitHub 上把旧的删掉。同一把公钥**不能**添加到两个仓库

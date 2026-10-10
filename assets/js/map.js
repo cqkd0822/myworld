@@ -80,7 +80,7 @@
     const end = all[all.length - 1];
 
     return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-label="轨迹轮廓">
-  <rect width="${width}" height="${height}" fill="#eef2f8"/>
+  <rect width="${width}" height="${height}" fill="#0b1220"/>
   <path d="${d}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.95" vector-effect="non-scaling-stroke"/>
   <circle cx="${start[0].toFixed(1)}" cy="${start[1].toFixed(1)}" r="5" fill="#12a150" stroke="#fff" stroke-width="2"/>
   <circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="5" fill="#e5484d" stroke="#fff" stroke-width="2"/>
@@ -179,6 +179,11 @@
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
 
+  function smallDotDataUri(color) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+<circle cx="4" cy="4" r="3" fill="${color}" stroke="#ffffff" stroke-width="1"/></svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
   function dotDataUri(color) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
 <circle cx="8" cy="8" r="5.5" fill="#ffffff" stroke="${color}" stroke-width="2.5"/></svg>`;
@@ -224,12 +229,25 @@
         canvas.style.cssText = 'position:absolute;inset:0';
         container.appendChild(canvas);
 
-        const map = new TMap.Map(canvas, {
+        // 和航迹图保持一致：配了个性化样式就传。之前没传，深色站里
+        // 会嵌一块官方浅色底图，整页只有这里是亮的。
+        const styleId = (M.site && M.site.mapStyleId) || '';
+        const initOpts = {
           center: new TMap.LatLng(track.center.lat, track.center.lng),
           zoom: track.center.zoom,
           pitch: 0,
           viewMode: '2D',
-        });
+        };
+        if (styleId) initOpts.mapStyleId = styleId;
+        const map = new TMap.Map(canvas, initOpts);
+        if (styleId) {
+          // 有的版本构造参数里的 mapStyleId 不生效，补一刀 setMapStyleId
+          try {
+            if (typeof map.setMapStyleId === 'function') map.setMapStyleId(styleId);
+          } catch (e) {
+            /* 保持默认底图 */
+          }
+        }
 
         // 构建期的 zoom 只是初值，这里按真实容器尺寸精确对框。
         // 包一层 try：不同版本 GL JS 的 fitBounds 签名不完全一致，
@@ -259,7 +277,7 @@
             trail: new TMap.PolylineStyle({
               color: track.color,
               width: 5,
-              borderWidth: 1.5,
+              borderWidth: 2, // TMap 只收整数像素，1.5 会被判无效、白描边直接消失
               borderColor: '#ffffff',
               lineCap: 'round',
             }),
@@ -307,11 +325,13 @@
                 anchor: { x: 13, y: 33 },
                 src: pinDataUri('#e5484d'),
               }),
+              // 补给点用小实心点。TOR330 有 81 个补给点，16px 的白心圆环
+              // 会把轨迹线盖成一串「空心项链」，线本身反而看不见。
               waypoint: new TMap.MarkerStyle({
-                width: 16,
-                height: 16,
-                anchor: { x: 8, y: 8 },
-                src: dotDataUri(track.color),
+                width: 8,
+                height: 8,
+                anchor: { x: 4, y: 4 },
+                src: smallDotDataUri(track.color),
               }),
             },
             geometries: markers,

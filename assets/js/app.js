@@ -1,7 +1,7 @@
 /**
  * 应用主逻辑 —— 路由 + 四个视图的渲染。
  *
- * 没有框架，也不需要：数据是静态的（100 段航班 + 47 段铁路 + 2 条轨迹，
+ * 没有框架，也不需要：数据是静态的（100 段航班 + 49 段铁路 + 2 条轨迹，
  * 全量序列化后不到 130 KB），页面用模板字符串拼出来就行。
  * 这样整个站零依赖、零构建，鼠标双击 index.html 就能看。
  *
@@ -381,9 +381,9 @@
         const h = (v) => `${Math.round((v / maxTotal) * 100)}%`;
         return `<div class="bars__col" title="${y} 年：航班 ${f} 段，铁路 ${r} 段">
   <span class="bars__n">${total || ''}</span>
-  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;height:100%">
-    <div class="bars__bar bars__bar--rail" style="height:${r ? h(r) : '0'}" ></div>
-    <div class="bars__bar" style="height:${f ? h(f) : '0'}"></div>
+  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:0;height:100%">
+    <div class="bars__bar bars__bar--rail" style="${r ? `height:${h(r)}` : 'display:none'}"></div>
+    <div class="bars__bar" style="${f ? `height:${h(f)}` : 'display:none'}"></div>
   </div>
 </div>`;
       })
@@ -416,7 +416,8 @@
     return `<div class="wrap">
   <section class="hero">
     <div class="hero__eyebrow">${esc(M.site.tagline)}</div>
-    <h1 class="hero__title">${esc(M.site.title)}</h1>
+    <!-- 页面 h1 由 render() 注入 sr-only 版本；这里只是视觉主标题，降级为 p 避免一页两个 h1 -->
+    <p class="hero__title">${esc(M.site.title)}</p>
     <div class="hero__sub">${esc(spanText)}</div>
     <div class="hero__grid">
       <div class="hero__stat"><b>${overview.flightCount}</b><span>段航班</span></div>
@@ -445,9 +446,9 @@
         )}</div>
       </div>
       <div class="stat">
-        <div class="stat__label">航班准点率</div>
+        <div class="stat__label">准点率（严格）</div>
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
-        <div class="stat__foot">${overview.onTime} 段准点或提前 / 共 ${overview.flightCount} 段</div>
+        <div class="stat__foot">${overview.onTime} 段准点或提前 / 共 ${overview.flightCount} 段 · 口径 delay≤0</div>
       </div>
     </div>
   </section>
@@ -685,7 +686,7 @@
   }</p>
 
   <div class="panel">
-    <h3 class="panel__title">${esc(t.name)}</h3>
+    <h2 class="panel__title">${esc(t.name)}</h2>
     <div class="kv">
       <div><div class="kv__k">总距离</div><div class="kv__v">${s.distanceKm}<small>km</small></div></div>
       <div><div class="kv__k">累计爬升</div><div class="kv__v">${U.formatNumber(s.ascentM)}<small>m</small></div></div>
@@ -711,14 +712,14 @@
   </div>
 
   <div class="panel">
-    <h3 class="panel__title">海拔剖面</h3>
+    <h2 class="panel__title">海拔剖面</h2>
     ${M.map.svgProfile(t.profile, { color: t.color })}
   </div>
 
   ${
     t.waypoints.length
       ? `<div class="panel">
-    <h3 class="panel__title">补给 / 检查点（${t.waypoints.length}）</h3>
+    <h2 class="panel__title">补给 / 检查点（${t.waypoints.length}）</h2>
     <div class="waypoints">
       ${t.waypoints
         .map(
@@ -821,7 +822,12 @@
     else if (route.tab === 'tracks') html = viewTracks();
     else html = viewHome();
 
-    view.innerHTML = html;
+    // 补一个屏幕阅读器用的 h1：顶栏标题是 <p>（否则一页两个 h1），
+    // 视图内部直接从 h2 起步，层级才不断档
+    const pageTitle = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
+      route.tab
+    ];
+    view.innerHTML = `<h1 class="sr-only">${esc(pageTitle)}</h1>` + html;
     document.getElementById('tabs').innerHTML = renderTabs(route.tab);
 
     // 航迹图占满一屏，列表页那条「给底部标签栏留空间」的 padding 就多余了
@@ -840,9 +846,7 @@
     const topbar = document.querySelector('.topbar');
     if (topbar) topbar.classList.toggle('is-stats', Boolean(statsMode));
 
-    const title = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
-      route.tab
-    ];
+    const title = pageTitle;
     document.getElementById('topTitle').textContent = title;
 
     const back = document.getElementById('back');

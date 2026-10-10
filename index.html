@@ -14,8 +14,17 @@
 
     <title>MyWorld · 行程记录</title>
 
+    <!-- 分享卡片：og:image 需要线上绝对地址，部署域名定下来后补 -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="MyWorld · 行程记录" />
+    <meta
+      property="og:description"
+      content="个人行程记录：100 段航班、49 段铁路与徒步轨迹。纯静态、无后端、无追踪。"
+    />
+
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="favicon.svg" />
+    <!-- iOS 不认 SVG 图标，之前加到主屏幕是空白；换成 180 PNG -->
+    <link rel="apple-touch-icon" href="assets/img/icon-180.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -41,7 +50,7 @@
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <h1 class="topbar__title" id="topTitle">MyWorld</h1>
+        <p class="topbar__title" id="topTitle">MyWorld</p>
       </div>
     </header>
 

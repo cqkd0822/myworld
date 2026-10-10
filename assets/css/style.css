@@ -387,7 +387,9 @@ a {
 .bars__bar {
   width: 100%;
   max-width: 26px;
-  border-radius: 5px 5px 3px 3px;
+  /* 圆角分段给：两段都带全圆角时，接缝处会露出一道深色缺口，
+     看起来像堆叠柱断开了 */
+  border-radius: 0;
   background: linear-gradient(180deg, #4a92ff, var(--brand));
   min-height: 3px;
   transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
@@ -395,6 +397,18 @@ a {
 
 .bars__bar--rail {
   background: linear-gradient(180deg, #34a89e, var(--rail));
+  border-radius: 5px 5px 0 0;
+}
+
+/* 航班段垫底：只圆下边 */
+.bars__bar:not(.bars__bar--rail) {
+  border-radius: 0 0 3px 3px;
+}
+
+/* 某一段为 0 时 app.js 会 display:none，剩下那段恢复全圆角 */
+.bars__bar--rail[style*="display:none"] + .bars__bar,
+.bars__bar--rail:last-child {
+  border-radius: 5px 5px 3px 3px;
 }
 
 .bars__n {
@@ -1926,4 +1940,33 @@ a {
   .wrap--stats {
     max-width: 560px;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* 无障碍与地图控件补丁（2026-10-10）                                   */
+/* ------------------------------------------------------------------ */
+
+/* 屏幕阅读器专用标题：顶栏是 <p>，每页的 h1 由 app.js 注入 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 键盘焦点环：之前全站没有 :focus-visible，Tab 过去完全看不出在哪 */
+:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* 全屏航迹图/线路图底部有统计条，腾讯的比例尺控件正好压在上面，
+   把第一个 KPI 挡掉一半。轨迹详情页的地图是卡片内的，保留。 */
+.is-mapview .tmap-scale-control {
+  display: none;
 }
