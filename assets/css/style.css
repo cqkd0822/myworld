@@ -917,6 +917,18 @@ a {
   color: var(--ink-3);
 }
 
+/* 越野跑卡片下的 ITRA 摘要行：积分 / 表现 / 等强配速 / 总排名 */
+.track__itra {
+  border-top: 1px dashed var(--line-soft);
+  padding: 7px 12px 8px;
+  font-size: 11px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 轨迹详情 */
 .detail__map {
   height: 320px;
@@ -926,6 +938,9 @@ a {
   background: #e9edf4;
   box-shadow: var(--shadow);
   position: relative;
+  /* 同 .citymap：圈住地图控件的高 z-index（详情页可滚动，更容易穿到顶栏） */
+  isolation: isolate;
+  z-index: 0;
 }
 
 .map-fallback {
@@ -1198,6 +1213,9 @@ a {
 
 .tmap {
   position: relative;
+  /* 同 .citymap：圈住地图控件的高 z-index，别穿到顶栏/底栏上面 */
+  isolation: isolate;
+  z-index: 0;
   /* 顶栏和底栏之间正好铺满一屏：这就是航迹图全部的可用空间 */
   height: calc(
     100vh - var(--topbar-h) - var(--tabbar-h) - env(safe-area-inset-bottom) -
@@ -2050,6 +2068,10 @@ a {
 /* 首页游历城市地图宿主 */
 .citymap {
   position: relative;
+  /* 独立堆叠上下文：腾讯 GL 的控件/画布自带很高的 z-index，
+     不圈起来的话页面滚动时会盖到 sticky 顶栏和 fixed 底栏上面（控件穿图） */
+  isolation: isolate;
+  z-index: 0;
   height: 300px;
   margin-top: 12px;
   border-radius: var(--r-lg);

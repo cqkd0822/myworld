@@ -86,9 +86,9 @@
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="11" r="2.4"/></svg>',
   };
 
-  /** kind → [列表标签, tag 样式]。race=比赛完赛，hike=日常徒步，course=赛事官方路线 */
+  /** kind → [列表标签, tag 样式]。race 是完赛的比赛——全是越野跑，直接标越野跑 */
   const KIND_TAG = {
-    race: ['已完赛', 'tag--ok'],
+    race: ['越野跑', 'tag--ok'],
     hike: ['徒步', 'tag--ok'],
     run: ['越野跑', 'tag--ok'],
     course: ['赛事路线', 'tag--neutral'],
@@ -694,7 +694,7 @@
     const stat = (label, value, unit, foot) =>
       `<div class="stat"><div class="stat__label">${label}</div><div class="stat__value">${value}<small>${unit}</small></div><div class="stat__foot">${foot}</div></div>`;
     return `<div class="stat-grid">
-      ${stat('轨迹条数', list.length, '条', `徒步 ${list.length - races} · 越野/比赛 ${races}`)}
+      ${stat('轨迹条数', list.length, '条', `徒步 ${list.length - races} · 越野跑 ${races}`)}
       ${stat('总里程', U.formatNumber(Math.round(totalKm)), 'km', `最长 ${esc(longest.name)} ${longest.stats.distanceKm} km`)}
       ${stat('总爬升', U.formatNumber(Math.round(totalAscent)), 'm', `平均每条 ${Math.round(totalAscent / list.length)} m`)}
       ${stat('移动时间', (movingSec / 3600).toFixed(0), 'h', '已剔除休息 / 过夜（间隔 >10 分钟）')}
@@ -712,7 +712,15 @@
     }
 
     let tlist = tracks;
-    if (state.trackKind !== 'all') tlist = tlist.filter((t) => t.kind === state.trackKind);
+    // 「越野跑」同时涵盖 race（完赛比赛）和 run——已完赛的全是越野跑，
+    // 没必要单独留一个「已完赛」筛选维度
+    if (state.trackKind !== 'all') {
+      tlist = tlist.filter((t) =>
+        state.trackKind === 'run'
+          ? t.kind === 'run' || t.kind === 'race'
+          : t.kind === state.trackKind,
+      );
+    }
     if (state.trackQuery.trim()) {
       const q = state.trackQuery.trim().toLowerCase();
       tlist = tlist.filter((t) => [t.name, t.region, t.date].join(' ').toLowerCase().includes(q));
@@ -722,6 +730,12 @@
       .map((t) => {
         const s = t.stats;
         const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(1) : null;
+        // ITRA 摘要：积分读到了就显示，没读到（null）只留表现与等强配速
+        const itraLine = t.itra
+          ? `<div class="track__itra">ITRA${
+              t.itra.points == null ? '' : ` ${t.itra.points} 分 ·`
+            } 表现 ${t.itra.perf} · 等强 ${t.itra.equivPace} · 总排名 ${t.itra.overall}</div>`
+          : '';
         return `<button class="track" data-track="${esc(t.id)}">
   <div class="track__head">
     <div class="track__pill" style="background:${t.color}">${icon.pin}</div>
@@ -740,6 +754,7 @@
           mv ? 'km/h 移动' : '用时'
         }</span></div>
   </div>
+  ${itraLine}
 </button>`;
       })
       .join('');
@@ -753,7 +768,6 @@
       { value: 'all', label: '全部' },
       { value: 'hike', label: '徒步' },
       { value: 'run', label: '越野跑' },
-      { value: 'race', label: '已完赛' },
     ], state.trackKind, 'trackKind')}
     <div class="searchrow"><input class="search" type="search" id="q-track" data-q="trackQuery" placeholder="搜轨迹名 / 地区 / 日期" value="${esc(state.trackQuery)}"></div>
   </div>
@@ -818,6 +832,30 @@
         : ''
     }
   </div>
+
+  ${
+    t.itra
+      ? `<div class="panel">
+    <h2 class="panel__title">ITRA · ${esc(t.itra.name)}</h2>
+    <div class="kv">
+      <div><div class="kv__k">ITRA 积分</div><div class="kv__v">${t.itra.points == null ? '—' : t.itra.points}</div></div>
+      <div><div class="kv__k">表现指数</div><div class="kv__v">${t.itra.perf}</div></div>
+      <div><div class="kv__k">完赛成绩</div><div class="kv__v">${t.itra.finishTime}</div></div>
+      <div><div class="kv__k">等强配速</div><div class="kv__v">${t.itra.equivPace.replace('/km', '')}<small>/km</small></div></div>
+      <div><div class="kv__k">平均配速</div><div class="kv__v">${t.itra.avgPace.replace('/km', '')}<small>/km</small></div></div>
+      <div><div class="kv__k">总排名</div><div class="kv__v">${t.itra.overall}</div></div>
+      <div><div class="kv__k">性别排名</div><div class="kv__v">${t.itra.gender}</div></div>
+      <div><div class="kv__k">年龄组排名</div><div class="kv__v">${t.itra.ageRank}</div></div>
+      <div><div class="kv__k">组别</div><div class="kv__v">${t.itra.category}</div></div>
+      <div><div class="kv__k">山地指数</div><div class="kv__v">${t.itra.mountain}</div></div>
+      <div><div class="kv__k">DNF</div><div class="kv__v">${t.itra.dnf}</div></div>
+      <div><div class="kv__k">女子占比</div><div class="kv__v">${t.itra.femalePct}</div></div>
+    </div>
+    <p class="footnote">数据来自 ITRA（athlete 6845683）。等强配速是把距离和爬升一起折算后的
+    等效路跑配速，不同赛道之间比这个数才公平；山地指数衡量赛道崎岖程度（0–12）。</p>
+  </div>`
+      : ''
+  }
 
   <div class="panel">
     <h2 class="panel__title">海拔剖面</h2>
@@ -1000,6 +1038,7 @@
         tracks: tracks.map((t) => ({
           id: t.id, name: t.name, date: t.date, region: t.region,
           kind: t.kind, color: t.color, stats: t.stats, waypoints: t.waypoints,
+          itra: t.itra,
         })),
       };
       return { name: `myworld-${stamp}.json`, mime: 'application/json', text: JSON.stringify(payload, null, 2) };
@@ -1088,10 +1127,15 @@
     }
   });
 
-  // 搜索框：输入即过滤；重渲染后把焦点和光标还给输入框，否则每敲一个字就失焦
-  document.addEventListener('input', (e) => {
-    const inp = e.target.closest('[data-q]');
-    if (!inp) return;
+  // 搜索框：输入即过滤；重渲染后把焦点和光标还给输入框，否则每敲一个字就失焦。
+  // IME（中文输入法）组字期间绝不能重渲染：input 事件里拿到的是还没上屏的
+  // 拼音字母，这时候重建 DOM 会打断组字，把拼音原文当成搜索词留在框里
+  // （表现为"输入中文出现拼音乱码"）。所以组字中只记录、不上屏，
+  // 等 compositionend（候选词确认上屏）后再过滤一次。
+  let imComposing = false;
+
+  /** 把输入框的当前值应用进筛选状态，并归还焦点与光标。 */
+  function applySearchQuery(inp) {
     const caret = inp.selectionStart;
     state[inp.dataset.q] = inp.value;
     render();
@@ -1100,6 +1144,25 @@
       again.focus();
       try { again.setSelectionRange(caret, caret); } catch (_) { /* 非文本输入忽略 */ }
     }
+  }
+
+  document.addEventListener('compositionstart', (e) => {
+    if (e.target.closest && e.target.closest('[data-q]')) imComposing = true;
+  });
+
+  document.addEventListener('compositionend', (e) => {
+    const inp = e.target.closest && e.target.closest('[data-q]');
+    if (!inp) return;
+    imComposing = false;
+    applySearchQuery(inp);
+  });
+
+  document.addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-q]');
+    if (!inp) return;
+    // isComposing 覆盖标准实现，imComposing 兜底老 WebView
+    if (imComposing || e.isComposing) return;
+    applySearchQuery(inp);
   });
 
   window.addEventListener('hashchange', render);

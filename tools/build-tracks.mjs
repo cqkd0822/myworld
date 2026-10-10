@@ -66,6 +66,23 @@ const MANIFEST = [
     color: '#1B6FF0',
     toleranceM: 3,
     eleThresholdM: 10,
+    // ITRA 官方成绩（athlete 6845683 LEI Ting），2026-10 从 ITRA 页面录入。
+    // points 为 null 是因为截图时该值被成绩弹窗挡住，没读到就不编。
+    itra: {
+      name: 'KAILAS FUGA LAKE SONGHUA NORTHEAST 100 MOUNTAIN RUNNING RACE - 30km',
+      points: null,
+      perf: 449,
+      finishTime: '5:16:01',
+      category: '28km/1823m+',
+      avgPace: "11'17\"/km",
+      equivPace: "06'50\"/km",
+      overall: '189/3178',
+      gender: '156/1887',
+      ageRank: 53,
+      dnf: '169/3009',
+      femalePct: '41%',
+      mountain: 7,
+    },
   },
   /* —— 2025 年徒步 32 条：企业微信收件的 GPX，2026-10 批量入库 —— */
   {
@@ -498,6 +515,21 @@ const MANIFEST = [
     color: '#94a3b8',
     toleranceM: 4,
     eleThresholdM: 10,
+    itra: {
+      name: 'wuxijunzhang - 14k',
+      points: 0,
+      perf: 393,
+      finishTime: '2:31:42',
+      category: '14km/685m+',
+      avgPace: "10'50\"/km",
+      equivPace: "07'16\"/km",
+      overall: '36/273',
+      gender: '29/145',
+      ageRank: 7,
+      dnf: '0/273',
+      femalePct: '47%',
+      mountain: 5,
+    },
   },
   {
     id: '2025-12-14-xuancheng-tiejiangfeng',
@@ -588,6 +620,22 @@ const MANIFEST = [
     color: "#1B6FF0",
     toleranceM: 4,
     eleThresholdM: 10,
+    // ITRA 赛名 HANGZHOU TRAIL，组别 24km/1405m+ 与 GPX 实测 24.83km/1249m 吻合
+    itra: {
+      name: "HANGZHOU TRAIL - 25km",
+      points: 1,
+      perf: 407,
+      finishTime: "4:13:38",
+      category: "24km/1405m+",
+      avgPace: "10'34\"/km",
+      equivPace: "06'39\"/km",
+      overall: "729/1962",
+      gender: "600/1380",
+      ageRank: 137,
+      dnf: "0/1962",
+      femalePct: "30%",
+      mountain: 6,
+    },
   },
   {
     id: "2026-03-15-pingxiang-wugongshan-2026",
@@ -665,6 +713,22 @@ const MANIFEST = [
     color: "#1B6FF0",
     toleranceM: 4,
     eleThresholdM: 10,
+    // ITRA 赛名 SN into the wild trail challenge-hangzhou
+    itra: {
+      name: "SN into the wild trail challenge-hangzhou - 24km",
+      points: 0,
+      perf: 415,
+      finishTime: "3:36:57",
+      category: "23km/1084m+",
+      avgPace: "09'25\"/km",
+      equivPace: "06'24\"/km",
+      overall: "55/297",
+      gender: "39/159",
+      ageRank: 8,
+      dnf: "22/275",
+      femalePct: "46%",
+      mountain: 5,
+    },
   },
   {
     id: "2026-04-26-shaoxing-fuzhishan",
@@ -709,6 +773,23 @@ const MANIFEST = [
     color: "#1B6FF0",
     toleranceM: 4,
     eleThresholdM: 10,
+    // ITRA 赛名 SALOMON Wuhan Community Dragon Boat Festival Mountain Trail Race，
+    // ITRA 记录的比赛日是 2026-06-20（周六），GPX 文件名日期是 06-19，以 GPX 为准
+    itra: {
+      name: "SALOMON Trail Running Wuhan Community Dragon Boat Festival Mountain Trail Race - 21km",
+      points: 1,
+      perf: 423,
+      finishTime: "4:22:22",
+      category: "21km/1051m+",
+      avgPace: "12'29\"/km",
+      equivPace: "08'19\"/km",
+      overall: "8/34",
+      gender: "6/22",
+      ageRank: 1,
+      dnf: "13/21",
+      femalePct: "35%",
+      mountain: 5,
+    },
   },
   {
     id: "2026-06-26-xinzhou-wutaishan-nichao",
@@ -859,6 +940,8 @@ for (const item of MANIFEST) {
     paths,
     profile,
     waypoints,
+    // ITRA 成绩（仅越野跑比赛有）：积分/表现/排名/等强配速等，字段见 MANIFEST 注释
+    ...(item.itra ? { itra: item.itra } : {}),
   });
 
   console.log(
@@ -901,6 +984,9 @@ const header = `/**
  *   rawPoints  —— 原始记录点数；shownPoints —— 实际发给浏览器的点数。
  *   kind       —— "race" 本人跑过的记录，"course" 赛事官方路线（无时间戳，
  *                 所以 durationSec 为 null，页面不会显示配速）。
+ *   itra       —— ITRA 官方成绩（越野跑比赛才有）：points 积分、perf 表现指数、
+ *                 equivPace 等强配速、overall/gender/ageRank 排名、mountain 山地指数。
+ *                 数据来自 ITRA athlete 6845683（LEI Ting），逐场从页面录入。
  */
 
 window.MYWORLD = window.MYWORLD || {};
