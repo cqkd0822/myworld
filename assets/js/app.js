@@ -82,6 +82,13 @@
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="11" r="2.4"/></svg>',
   };
 
+  /** kind → [列表标签, tag 样式]。race=比赛完赛，hike=日常徒步，course=赛事官方路线 */
+  const KIND_TAG = {
+    race: ['已完赛', 'tag--ok'],
+    hike: ['徒步', 'tag--ok'],
+    course: ['赛事路线', 'tag--neutral'],
+  };
+
   // 键名必须和 TABS 里的 key 一致，否则 tabbar 上会渲染出 "undefined"
   const tabIcon = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 4l8.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4.5V14h-5v6.5H5A1.5 1.5 0 0 1 3.5 19z"/></svg>',
@@ -646,8 +653,8 @@
       <div class="track__name">${esc(t.name)}</div>
       <div class="track__region">${esc(t.region)} · ${esc(t.date)}</div>
     </div>
-    <span class="tag ${t.kind === 'race' ? 'tag--ok' : 'tag--neutral'}">${
-          t.kind === 'race' ? '已完赛' : '赛事路线'
+    <span class="tag ${(KIND_TAG[t.kind] || ['轨迹', 'tag--neutral'])[1]}">${
+          (KIND_TAG[t.kind] || ['轨迹'])[0]
         }</span>
   </div>
   <div class="track__stats">
