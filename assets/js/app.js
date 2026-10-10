@@ -54,10 +54,11 @@
     flightYear: 'all',
     flightAirline: 'all',
     railYear: 'all',
-    // 「列表 | 航迹图」两种视图。航迹图是全局状态：切到别的 tab 再回来，
-    // 你刚才看的还是航迹图，而不是被悄悄重置回列表。
-    flightView: 'list',
-    railView: 'list',
+    // 「统计 | 列表 | 航迹图」三种视图。默认停在统计——打开一个 tab
+    // 先看到成果，再往下翻明细。切到别的 tab 再回来，状态不会被打回原形。
+    flightView: 'stats',
+    railView: 'stats',
+    trackView: 'stats',
   };
 
   /* ------------------------------------------------------------------ */
@@ -242,11 +243,21 @@
       .join('')}</div>`;
   }
 
-  /** 「列表 | 航迹图」分段切换。 */
-  function viewToggle(kind, active) {
+  /** 「统计 | 列表 | 航迹图」分段切换。views 传入要展示哪几段。
+      地图视图的叫法跟着出行方式走：飞行叫航迹图，铁路叫线路图，足迹叫轨迹图。 */
+  function viewToggle(kind, active, views = ['stats', 'list', 'map']) {
+    const label = {
+      stats: '统计',
+      list: kind === 'tracks' ? '轨迹' : '列表',
+      map: { flights: '航迹图', rail: '线路图', tracks: '轨迹图' }[kind] || '地图',
+    };
     return `<div class="vtoggle" role="tablist">
-      <button class="vtoggle__btn${active === 'list' ? ' is-active' : ''}" data-tview="${kind}:list">列表</button>
-      <button class="vtoggle__btn${active === 'map' ? ' is-active' : ''}" data-tview="${kind}:map">航迹图</button>
+      ${views
+        .map(
+          (v) =>
+            `<button class="vtoggle__btn${active === v ? ' is-active' : ''}" data-tview="${kind}:${v}">${label[v]}</button>`,
+        )
+        .join('')}
     </div>`;
   }
 
@@ -298,6 +309,14 @@
       <div class="tmap__host" id="tmapHost"></div>
       <div class="tmap__switch">${viewToggle(kind, 'map')}</div>
     </div>`;
+  }
+
+  /** 统计页外壳：深色主题由 is-stats 承担，切换条在顶部 */
+  function statsPage(kind, active, body) {
+    return `<div class="wrap wrap--stats">
+  <div class="listhead">${viewToggle(kind, active)}</div>
+  ${body}
+</div>`;
   }
 
   /**
@@ -488,15 +507,20 @@
   /* ------------------------------------------------------------------ */
 
   function viewFlights() {
+    // 统计：永远看全量，筛选 chips 是列表页的事
+    if (state.flightView === 'stats') {
+      return statsPage('flights', 'stats', M.stats.flightView(flights, overview));
+    }
+
+    // 航迹图模式：整页都是地图，筛选（年份）由地图上的时间轴接管
+    if (state.flightView === 'map') return routeMapView('flights');
+
     let list = flights;
     if (state.flightYear !== 'all') list = list.filter((f) => f.date && f.date.year === +state.flightYear);
     if (state.flightAirline !== 'all') list = list.filter((f) => f.airline === state.flightAirline);
 
     const km = list.reduce((s, f) => s + (f.distanceKm || 0), 0);
     const fare = list.reduce((s, f) => s + (f.price || 0), 0);
-
-    // 航迹图模式：整页都是地图，筛选（年份）由地图上的时间轴接管
-    if (state.flightView === 'map') return routeMapView('flights');
 
     return `<div class="wrap">
   <div class="listhead">
@@ -531,13 +555,17 @@
   /* ------------------------------------------------------------------ */
 
   function viewRail() {
+    if (state.railView === 'stats') {
+      return statsPage('rail', 'stats', M.stats.railView(rails));
+    }
+
+    if (state.railView === 'map') return routeMapView('rail');
+
     let list = rails;
     if (state.railYear !== 'all') list = list.filter((r) => r.date && r.date.year === +state.railYear);
 
     const seatKinds = new Map();
     list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
-
-    if (state.railView === 'map') return routeMapView('rail');
 
     return `<div class="wrap">
   <div class="listhead">
@@ -590,6 +618,10 @@
       return '<div class="wrap"><div class="empty">还没有轨迹。把 GPX 放进 tools/source/ 再跑一次构建脚本。</div></div>';
     }
 
+    if (state.trackView === 'stats') {
+      return statsPage('tracks', 'stats', M.stats.trackView(tracks));
+    }
+
     const cards = tracks
       .map((t) => {
         const s = t.stats;
@@ -617,6 +649,9 @@
       .join('');
 
     return `<div class="wrap">
+  <div class="listhead">
+    ${viewToggle('tracks', 'list', ['stats', 'list'])}
+  </div>
   <div class="section__head" style="margin-top:16px">
     <h2 class="section__title">${tracks.length} 条轨迹</h2>
     <span class="section__hint">共 ${U.formatNumber(
@@ -739,18 +774,25 @@
 
     // #/flights/map 这种深链：既是可收藏的入口，也让自动化截图能直达航迹图
     const mapView = /\/map$/.test(hash);
+    const statsView = /\/stats$/.test(hash);
     const listView = /\/list$/.test(hash);
     if (hash.startsWith('#/flights')) {
       if (mapView) state.flightView = 'map';
+      else if (statsView) state.flightView = 'stats';
       else if (listView) state.flightView = 'list';
       return { tab: 'flights' };
     }
     if (hash.startsWith('#/rail')) {
       if (mapView) state.railView = 'map';
+      else if (statsView) state.railView = 'stats';
       else if (listView) state.railView = 'list';
       return { tab: 'rail' };
     }
-    if (hash.startsWith('#/tracks')) return { tab: 'tracks' };
+    if (hash.startsWith('#/tracks')) {
+      if (statsView) state.trackView = 'stats';
+      else if (listView) state.trackView = 'list';
+      return { tab: 'tracks' };
+    }
     return { tab: 'home' };
   }
 
@@ -788,6 +830,16 @@
       (route.tab === 'rail' && state.railView === 'map');
     view.classList.toggle('is-mapview', Boolean(mapMode));
 
+    // 统计页是深色的，顶栏和内容区要一起换肤；tabbar 保持浅色作锚点
+    const statsMode =
+      !route.detail &&
+      ((route.tab === 'flights' && state.flightView === 'stats') ||
+        (route.tab === 'rail' && state.railView === 'stats') ||
+        (route.tab === 'tracks' && state.trackView === 'stats'));
+    view.classList.toggle('is-stats', Boolean(statsMode));
+    const topbar = document.querySelector('.topbar');
+    if (topbar) topbar.classList.toggle('is-stats', Boolean(statsMode));
+
     const title = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
       route.tab
     ];
@@ -812,7 +864,8 @@
     if (tv) {
       const [kind, mode] = tv.dataset.tview.split(':');
       if (kind === 'flights') state.flightView = mode;
-      else state.railView = mode;
+      else if (kind === 'rail') state.railView = mode;
+      else state.trackView = mode;
       render();
       return;
     }

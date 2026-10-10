@@ -316,22 +316,22 @@
         );
       }
 
-      // 三档粗细。样式键名必须和几何上的 styleId 完全一致，
+      // 三档粗细，全部是细线：航旅纵横的航线在手机上也就 1~2px，
+      // 层级靠透明度和晕光区分，而不是靠加粗——一加粗就变成蜘蛛网。
+      // 样式键名必须和几何上的 styleId 完全一致，
       // 少定义一个就会让那一档回退成默认蓝色（踩过这个坑）。
-      const widthFor = [2.2, 3.4, 4.8];
+      const widthFor = [1, 1.4, 2];
       const coreStyles = {};
       const glowStyles = {};
       for (let b = 0; b < 3; b++) {
         coreStyles['b' + b] = new TMap.PolylineStyle({
-          color: accent,
+          color: tint(accent, b === 0 ? 0.75 : 0.9),
           width: widthFor[b],
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,.6)',
           lineCap: 'round',
         });
         glowStyles['b' + b] = new TMap.PolylineStyle({
-          color: tint(accent, 0.18),
-          width: widthFor[b] + 7,
+          color: tint(accent, b === 0 ? 0.12 : 0.2),
+          width: widthFor[b] + 3,
           lineCap: 'round',
         });
       }
@@ -360,16 +360,16 @@
 
       const plainStyles = {
         big: new TMap.MarkerStyle({
-          width: 20,
-          height: 20,
-          anchor: { x: 10, y: 10 },
-          src: dotDataUri(accent, 4.6),
-        }),
-        small: new TMap.MarkerStyle({
           width: 14,
           height: 14,
           anchor: { x: 7, y: 7 },
           src: dotDataUri(accent, 3),
+        }),
+        small: new TMap.MarkerStyle({
+          width: 10,
+          height: 10,
+          anchor: { x: 5, y: 5 },
+          src: dotDataUri(accent, 2.2),
         }),
       };
       const plainGeoms = [];
@@ -380,7 +380,7 @@
         const n = visits.get(c);
         const pos = new TMap.LatLng(M.cityCoords[c][0], M.cityCoords[c][1]);
         if (labeled.has(c)) {
-          const r = n >= 8 ? 4.4 : 3.6;
+          const r = n >= 8 ? 3 : 2.5;
           const uri = labeledDotUri(c, accent, r, dark);
           const w = r + 5.5 + 5 + [...c].length * 12 + 6;
           const h = Math.max(r * 2 + 6, 19);

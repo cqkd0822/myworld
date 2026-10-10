@@ -5,8 +5,8 @@
     <!-- viewport-fit=cover 是给 iPhone 刘海屏用的：不加的话底部标签栏会陷进
          Home 指示条里，加了下方的 safe-area-inset 才会生效 -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f2f4f8" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#0c1220" />
+    <meta name="color-scheme" content="dark" />
     <meta
       name="description"
       content="个人行程记录：航班、铁路与徒步轨迹。数据全部为静态文件，无后端、无追踪。"
@@ -21,7 +21,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MyWorld" />
 
-    <link rel="stylesheet" href="assets/css/style.css" />
+    <link rel="stylesheet" href="assets/css/style.css?v=20261010a" />
   </head>
 
   <body>
@@ -56,14 +56,15 @@
       这样做是为了让 index.html 直接用 file:// 双击打开也能跑——
       ES module 在 file:// 下会被 CORS 拦掉，那样本地预览就没法用了。
     -->
-    <script src="assets/data/site.js"></script>
-    <script src="assets/data/airports.js"></script>
-    <script src="assets/data/flights.js"></script>
-    <script src="assets/data/rail.js"></script>
-    <script src="assets/data/tracks.js"></script>
-    <script src="assets/js/data-utils.js"></script>
-    <script src="assets/js/map.js"></script>
-    <script src="assets/js/routemap.js"></script>
-    <script src="assets/js/app.js"></script>
+    <script src="assets/data/site.js?v=20261010a"></script>
+    <script src="assets/data/airports.js?v=20261010a"></script>
+    <script src="assets/data/flights.js?v=20261010a"></script>
+    <script src="assets/data/rail.js?v=20261010a"></script>
+    <script src="assets/data/tracks.js?v=20261010a"></script>
+    <script src="assets/js/data-utils.js?v=20261010a"></script>
+    <script src="assets/js/stats.js?v=20261010a"></script>
+    <script src="assets/js/map.js?v=20261010a"></script>
+    <script src="assets/js/routemap.js?v=20261010a"></script>
+    <script src="assets/js/app.js?v=20261010a"></script>
   </body>
 </html>
