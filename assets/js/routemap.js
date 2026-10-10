@@ -542,5 +542,167 @@
     return { fallback, setYear };
   }
 
-  M.routemap = { render, destroy, greatCircle, aggregate };
+  /* ------------------------------------------------------------------ */
+  /* 游历城市地图：把去过的城市在深色底图上点亮                            */
+  /* ------------------------------------------------------------------ */
+
+  /** 离线 SVG：全国固定框内画城市光点（底图挂了也能看）。 */
+  function svgCityDots(pts, opts) {
+    const width = (opts && opts.width) || 680;
+    const height = (opts && opts.height) || 420;
+    const accent = (opts && opts.accent) || '#ffc247';
+    const LAT0 = 18, LAT1 = 51, LNG0 = 76, LNG1 = 134;
+    const kx = Math.cos((((LAT0 + LAT1) / 2) * Math.PI) / 180);
+    const s = Math.min((width - 24) / ((LNG1 - LNG0) * kx), (height - 24) / (LAT1 - LAT0));
+    const ox = (width - (LNG1 - LNG0) * kx * s) / 2;
+    const oy = (height - (LAT1 - LAT0) * s) / 2;
+    const project = ([lat, lng]) => [ox + (lng - LNG0) * kx * s, oy + (LAT1 - lat) * s];
+    const dots = pts
+      .map((p) => {
+        const [x, y] = project(p.pos);
+        const r = 2.5 + Math.min(4, p.total / 6);
+        return (
+          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 3).toFixed(1)}" fill="${accent}" opacity="0.18"/>` +
+          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#ffffff" stroke="${accent}" stroke-width="1.6"/>`
+        );
+      })
+      .join('');
+    const labels = pts
+      .slice()
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10)
+      .map((p) => {
+        const [x, y] = project(p.pos);
+        return `<text x="${(x + 8).toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#e2e8f0" font-size="12" stroke="rgba(8,15,30,.85)" stroke-width="3" paint-order="stroke">${p.c}</text>`;
+      })
+      .join('');
+    return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-label="游历城市分布">
+<rect width="${width}" height="${height}" fill="#0b1220"/>${dots}${labels}</svg>`;
+  }
+
+  /**
+   * 城市点亮地图。cities: [[city, total, {rail,flight,track}], ...]
+   * 和航迹图同一套思路：先画离线光点，再叠腾讯深色底图；
+   * 高频城市带名字标签，挨太近的把标签翻到左边避让。
+   */
+  function renderCityMap(container, cities, opts) {
+    destroy();
+    const accent = (opts && opts.accent) || '#ffc247';
+    const dark = true;
+    const pts = (cities || [])
+      .map(([c, total, o]) => ({ c, total, o, pos: M.cityCoords[c] }))
+      .filter((p) => p.pos);
+    if (!pts.length) {
+      container.innerHTML = '<div class="map-offline" style="position:absolute;inset:0"></div>';
+      return { fallback: Promise.resolve(null) };
+    }
+
+    container.innerHTML = `<div class="map-offline" style="position:absolute;inset:0">${svgCityDots(pts, { accent })}</div>`;
+    const hint = document.createElement('div');
+    hint.style.cssText =
+      'position:absolute;left:10px;bottom:10px;z-index:5;background:rgba(12,18,32,.85);' +
+      'padding:4px 9px;border-radius:999px;font-size:11px;color:#9aa5bd';
+    hint.textContent = '正在加载地图底图…';
+    container.appendChild(hint);
+
+    const fallback = M.map
+      .loadApi()
+      .then((TMap) => {
+        const canvas = document.createElement('div');
+        canvas.style.cssText = 'position:absolute;inset:0';
+        container.appendChild(canvas);
+        const styleId = (M.site && M.site.mapStyleId) || '';
+        const initOpts = { center: new TMap.LatLng(34.5, 108.9), zoom: 4.4, pitch: 0, viewMode: '2D' };
+        if (styleId) initOpts.mapStyleId = styleId;
+        const map = new TMap.Map(canvas, initOpts);
+        if (styleId) {
+          try {
+            if (typeof map.setMapStyleId === 'function') map.setMapStyleId(styleId);
+          } catch (e) {
+            /* 保持默认底图 */
+          }
+        }
+
+        const layers = [];
+        const plainStyles = {
+          big: new TMap.MarkerStyle({ width: 14, height: 14, anchor: { x: 7, y: 7 }, src: dotDataUri(accent, 4) }),
+          small: new TMap.MarkerStyle({ width: 10, height: 10, anchor: { x: 5, y: 5 }, src: dotDataUri(accent, 2.2) }),
+        };
+        const plainGeoms = [];
+        const labelStyles = {};
+        const labelGeoms = [];
+        const labeled = new Set(
+          pts.slice().sort((a, b) => b.total - a.total).slice(0, 8).map((p) => p.c),
+        );
+        const placed = [];
+        for (const p of pts) {
+          const pos = new TMap.LatLng(p.pos[0], p.pos[1]);
+          if (labeled.has(p.c)) {
+            const clash = placed.some(([la, lo]) => Math.hypot(la - p.pos[0], lo - p.pos[1]) < 3);
+            placed.push(p.pos);
+            const r = p.total >= 8 ? 3 : 2.5;
+            const lab = labeledDotUri(p.c, accent, r, dark, clash ? 'left' : 'right');
+            const sk = 'c' + labelGeoms.length;
+            labelStyles[sk] = new TMap.MarkerStyle({
+              width: lab.w,
+              height: lab.h,
+              anchor: { x: lab.anchorX, y: lab.h / 2 },
+              src: lab.uri,
+            });
+            labelGeoms.push({ id: sk, styleId: sk, position: pos });
+          } else {
+            plainGeoms.push({
+              id: 'p' + plainGeoms.length,
+              styleId: p.total >= 8 ? 'big' : 'small',
+              position: pos,
+            });
+          }
+        }
+        if (plainGeoms.length) layers.push(new TMap.MultiMarker({ map, styles: plainStyles, geometries: plainGeoms }));
+        if (labelGeoms.length) layers.push(new TMap.MultiMarker({ map, styles: labelStyles, geometries: labelGeoms }));
+
+        try {
+          const lats = pts.map((p) => p.pos[0]);
+          const lngs = pts.map((p) => p.pos[1]);
+          const bounds = new TMap.LatLngBounds(
+            new TMap.LatLng(Math.min.apply(null, lats), Math.min.apply(null, lngs)),
+            new TMap.LatLng(Math.max.apply(null, lats), Math.max.apply(null, lngs)),
+          );
+          if (map.fitBounds) {
+            map.fitBounds(bounds, { padding: 40 });
+            if (map.panBy) map.panBy(0, 20);
+          }
+        } catch (e) {
+          /* 保留当前视野 */
+        }
+
+        const off = container.querySelector('.map-offline');
+        if (off) off.remove();
+        hint.remove();
+        current = {
+          destroy() {
+            for (const l of layers) {
+              try {
+                l.setMap(null);
+              } catch (e) {
+                /* 已销毁 */
+              }
+            }
+            if (map && map.destroy) map.destroy();
+          },
+        };
+        return map;
+      })
+      .catch((err) => {
+        hint.style.background = 'rgba(190,40,40,.92)';
+        hint.style.color = '#fff';
+        hint.textContent = '底图未加载：' + err.message;
+        current = { destroy() {} };
+        return null;
+      });
+
+    return { fallback };
+  }
+
+  M.routemap = { render, renderCityMap, destroy, greatCircle, aggregate };
 })();

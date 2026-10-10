@@ -54,6 +54,10 @@
     flightYear: 'all',
     flightAirline: 'all',
     railYear: 'all',
+    flightQuery: '',
+    railQuery: '',
+    trackQuery: '',
+    trackKind: 'all',
     // 「统计 | 列表 | 航迹图」三种视图。默认停在统计——打开一个 tab
     // 先看到成果，再往下翻明细。切到别的 tab 再回来，状态不会被打回原形。
     flightView: 'stats',
@@ -334,6 +338,13 @@
    * 年份筛选沿用列表页的 state，所以你在航迹图里拖到 2024，
    * 切回列表看到的也是 2024——两边是同一份筛选状态。
    */
+  /** 首页游历城市地图：把三源并集的城市点亮。 */
+  function mountCityMap() {
+    const host = document.getElementById('cityMapHost');
+    if (!host) return;
+    M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#ffc247' });
+  }
+
   function mountRouteMap(kind) {
     const host = document.getElementById('tmapHost');
     if (!host) return;
@@ -480,6 +491,7 @@
         })
         .join('')}
     </div>
+    <div class="citymap" id="cityMapHost"></div>
   </section>
 
   <section class="section">
@@ -560,6 +572,13 @@
     let list = flights;
     if (state.flightYear !== 'all') list = list.filter((f) => f.date && f.date.year === +state.flightYear);
     if (state.flightAirline !== 'all') list = list.filter((f) => f.airline === state.flightAirline);
+    if (state.flightQuery.trim()) {
+      const q = state.flightQuery.trim().toLowerCase();
+      list = list.filter((f) =>
+        [f.flightNo, f.airline, f.from.raw, f.to.raw, f.from.city, f.to.city, f.dateRaw, f.aircraft, f.reg, f.cabin, f.seat]
+          .join(' ').toLowerCase().includes(q),
+      );
+    }
 
     const km = list.reduce((s, f) => s + (f.distanceKm || 0), 0);
     const fare = list.reduce((s, f) => s + (f.price || 0), 0);
@@ -581,6 +600,7 @@
       state.flightAirline,
       'flightAirline',
     )}
+    <div class="searchrow"><input class="search" type="search" id="q-flight" data-q="flightQuery" placeholder="搜航班号 / 城市 / 机场 / 机型 / 日期" value="${esc(state.flightQuery)}"></div>
   </div>
 
   <div class="section__head">
@@ -605,6 +625,12 @@
 
     let list = rails;
     if (state.railYear !== 'all') list = list.filter((r) => r.date && r.date.year === +state.railYear);
+    if (state.railQuery.trim()) {
+      const q = state.railQuery.trim().toLowerCase();
+      list = list.filter((r) =>
+        [r.train, r.from, r.to, r.fromCity, r.toCity, r.note, r.dateRaw, r.seat].join(' ').toLowerCase().includes(q),
+      );
+    }
 
     const seatKinds = new Map();
     list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
@@ -620,6 +646,7 @@
       state.railYear,
       'railYear',
     )}
+    <div class="searchrow"><input class="search" type="search" id="q-rail" data-q="railQuery" placeholder="搜车次 / 车站 / 城市 / 备注" value="${esc(state.railQuery)}"></div>
   </div>
 
   <div class="section__head">
@@ -684,7 +711,14 @@
       return statsPage('tracks', 'stats', trackStatsBody(tracks));
     }
 
-    const cards = tracks
+    let tlist = tracks;
+    if (state.trackKind !== 'all') tlist = tlist.filter((t) => t.kind === state.trackKind);
+    if (state.trackQuery.trim()) {
+      const q = state.trackQuery.trim().toLowerCase();
+      tlist = tlist.filter((t) => [t.name, t.region, t.date].join(' ').toLowerCase().includes(q));
+    }
+
+    const cards = tlist
       .map((t) => {
         const s = t.stats;
         const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(1) : null;
@@ -714,10 +748,19 @@
   <div class="listhead">
     ${viewToggle('tracks', 'list', ['stats', 'list'])}
   </div>
+  <div class="filters">
+    ${chipRow('类型', [
+      { value: 'all', label: '全部' },
+      { value: 'hike', label: '徒步' },
+      { value: 'run', label: '越野跑' },
+      { value: 'race', label: '已完赛' },
+    ], state.trackKind, 'trackKind')}
+    <div class="searchrow"><input class="search" type="search" id="q-track" data-q="trackQuery" placeholder="搜轨迹名 / 地区 / 日期" value="${esc(state.trackQuery)}"></div>
+  </div>
   <div class="section__head" style="margin-top:16px">
-    <h2 class="section__title">${tracks.length} 条轨迹</h2>
+    <h2 class="section__title">${tlist.length} 条轨迹</h2>
     <span class="section__hint">共 ${U.formatNumber(
-      Math.round(tracks.reduce((s, t) => s + t.stats.distanceKm, 0)),
+      Math.round(tlist.reduce((s, t) => s + t.stats.distanceKm, 0)),
     )} 公里</span>
   </div>
   <div class="group">${cards}</div>
@@ -920,6 +963,7 @@
     if (route.detail) mountTrackMap(route.trackId);
     else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
     else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
+    else if (route.tab === 'home') mountCityMap();
 
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -1041,6 +1085,20 @@
 
     if (e.target.closest('#back')) {
       history.back();
+    }
+  });
+
+  // 搜索框：输入即过滤；重渲染后把焦点和光标还给输入框，否则每敲一个字就失焦
+  document.addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-q]');
+    if (!inp) return;
+    const caret = inp.selectionStart;
+    state[inp.dataset.q] = inp.value;
+    render();
+    const again = document.getElementById(inp.id);
+    if (again) {
+      again.focus();
+      try { again.setSelectionRange(caret, caret); } catch (_) { /* 非文本输入忽略 */ }
     }
   });
 

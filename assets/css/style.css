@@ -702,13 +702,14 @@ a {
 
 .price {
   font-weight: 700;
-  color: var(--ink);
+  /* .flight__bottom 是白底，票价必须用深色字才有对比度 */
+  color: #0f172a;
   font-variant-numeric: tabular-nums;
 }
 
 .price--unknown {
   font-weight: 500;
-  color: var(--ink-3);
+  color: #6b7280;
 }
 
 /* 状态标签 */
@@ -2018,4 +2019,46 @@ a {
 
 .btn:active {
   transform: scale(0.98);
+}
+
+/* 列表搜索框 */
+.searchrow {
+  margin-top: 10px;
+}
+
+.search {
+  width: 100%;
+  appearance: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 10px 13px;
+}
+
+.search::placeholder {
+  color: var(--ink-3);
+}
+
+.search:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* 首页游历城市地图宿主 */
+.citymap {
+  position: relative;
+  height: 300px;
+  margin-top: 12px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: #0b1220;
+  border: 1px solid var(--line-soft);
+}
+
+/* 首页城市地图：比例尺控件会压到 tabbar，隐藏 */
+.citymap .tmap-scale-control {
+  display: none;
 }
