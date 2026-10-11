@@ -1696,10 +1696,15 @@ a {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
+/* section() 发的是 <h2>，这里一并接住；flex:none 保证长 hint 只挤自己，
+   不把标题挤到折行（「运动构成」折成两行实测过） */
+.st-sec__head h2,
 .st-sec__head h3 {
+  flex: none;
   margin: 0;
   font-size: 15px;
   font-weight: 650;
@@ -1707,6 +1712,9 @@ a {
 }
 
 .st-sec__head span {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
   font-size: 11px;
   color: #5f6a83;
 }
@@ -1963,6 +1971,69 @@ a {
   font-style: normal;
   color: #4d5670;
   margin-left: 3px;
+}
+
+/* 月度分布：跟 24 小时的绿柱区分开，用品牌蓝。
+   必须带 :not(.is-peak)，否则和 .st-hours__bar.is-peak 同权重，
+   写在文件末尾会反过来把峰值那根的金色盖掉。 */
+.st-hours--month .st-hours__bar:not(.is-peak) {
+  background: linear-gradient(180deg, #5aa2ff, rgba(90, 162, 255, 0.32));
+}
+
+/* ---- ITRA 成绩卡 ---- */
+.st-itra__row {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.st-itra__row:first-child {
+  padding-top: 2px;
+}
+
+.st-itra__row:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.st-itra__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.st-itra__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-itra__pi {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.st-itra__pi b {
+  margin-left: 3px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #3ddc97;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-itra__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--ink-3);
 }
 
 /* 桌面端收窄到与列表页一致的宽度 */

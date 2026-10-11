@@ -125,21 +125,30 @@
   </div>`;
   }
 
-  /** 24 小时出发柱状。行内小图，不需要轴。 */
-  function hourBars(hours) {
-    const max = Math.max(1, ...hours);
-    const peak = hours.indexOf(max);
-    const bars = hours
-      .map((v, h) => {
+  /**
+   * 等宽柱状图 —— 24 小时出发时刻和 12 个月分布共用。
+   * 行内小图，不要坐标轴；只把峰值单独染色，让「几点出发」「哪个月在山里」
+   * 一眼就有答案，其余柱子退成背景。variant 只换色，不改骨架。
+   */
+  function colBars(values, labels, { variant = '' } = {}) {
+    const max = Math.max(1, ...values);
+    const peak = values.indexOf(max);
+    const bars = values
+      .map((v, i) => {
         const hp = Math.max(v ? 6 : 2, Math.round((v / max) * 100));
-        const isPeak = h === peak && v > 0;
-        return `<div class="st-hours__col" title="${String(h).padStart(2, '0')}:00 出发 ${v} 次">
+        const isPeak = i === peak && v > 0;
+        return `<div class="st-hours__col" title="${esc(labels[i])} · ${v}">
       <div class="st-hours__bar${isPeak ? ' is-peak' : ''}" style="height:${hp}%"></div>
-      <span class="st-hours__h${isPeak ? ' is-peak' : ''}">${h}</span>
+      <span class="st-hours__h${isPeak ? ' is-peak' : ''}">${esc(labels[i])}</span>
     </div>`;
       })
       .join('');
-    return `<div class="st-hours">${bars}</div>`;
+    return `<div class="st-hours${variant ? ' ' + variant : ''}">${bars}</div>`;
+  }
+
+  /** 24 小时出发柱状 */
+  function hourBars(hours) {
+    return colBars(hours, hours.map((_, h) => String(h)));
   }
 
   /** 区间分布横条（车型 / 座位这类「类别占比」） */
@@ -439,19 +448,103 @@
   /* 足迹                                                                */
   /* ------------------------------------------------------------------ */
 
+  /**
+   * ITRA 成绩卡。P.I. 之间只差几十点，画成等宽条全长一个样，还不如把数字排开——
+   * 一行赛事名 + 右对齐的 P.I. 大数字，下面一行元信息。像成绩单，不像图表。
+   */
+  function itraBoard(rows) {
+    return `<div class="st-itra">${rows
+      .map((t) => {
+        const i = t.itra;
+        const meta = [
+          `积分 ${i.points == null ? '—' : i.points}`,
+          `等强配速 ${i.equivPace}`,
+          `总排名 ${i.overall}`,
+          `年龄组 ${i.ageRank}`,
+          i.mountain == null ? '' : `山地 ${i.mountain}`,
+        ].filter(Boolean);
+        return `<div class="st-itra__row">
+      <div class="st-itra__top">
+        <span class="st-itra__name">${esc(t.name)}</span>
+        <span class="st-itra__pi">P.I.<b>${i.perf}</b></span>
+      </div>
+      <div class="st-itra__meta">${meta.map((m) => `<span>${esc(m)}</span>`).join('')}</div>
+    </div>`;
+      })
+      .join('')}</div>`;
+  }
+
+  /** region 形如「浙江 · 杭州」「香港」「皖浙 · 徽杭古道」，取省级那段 */
+  function provinceOf(region) {
+    const p = String(region || '').split('·')[0].trim();
+    return p || '未标注';
+  }
+
+  /** 单次最高海拔的分档。比「平均海拔」更能说明这一天到底有没有上山。 */
+  const ELE_BANDS = [
+    { below: 300, label: '300 m 以下' },
+    { below: 1000, label: '300 – 1000 m' },
+    { below: 2000, label: '1000 – 2000 m' },
+    { below: 3000, label: '2000 – 3000 m' },
+    { below: Infinity, label: '3000 m 以上' },
+  ];
+
   function trackView(tracks) {
     if (!tracks.length) return '<div class="st-page"><div class="st-empty">还没有轨迹</div></div>';
 
-    let km = 0, up = 0, sec = 0, maxEle = 0;
+    let km = 0, up = 0, dn = 0, sec = 0, movingSec = 0, movingKm = 0;
+    let maxEle = 0, minEle = Infinity;
+    const byMonth = Array(12).fill(0);
+    const byYear = new Map();
+    const byProvince = new Map();
+    const bands = ELE_BANDS.map(() => 0);
+    const kinds = { hike: { n: 0, km: 0, up: 0 }, run: { n: 0, km: 0, up: 0 } };
+
     for (const t of tracks) {
-      km += t.stats.distanceKm;
-      up += t.stats.ascentM;
-      if (t.stats.durationSec) sec += t.stats.durationSec;
-      maxEle = Math.max(maxEle, t.stats.maxEle);
+      const s = t.stats;
+      km += s.distanceKm;
+      up += s.ascentM;
+      dn += s.descentM || 0;
+      if (s.durationSec) sec += s.durationSec;
+      movingSec += s.movingTimeSec || 0;
+      movingKm += s.movingDistanceKm || 0;
+      maxEle = Math.max(maxEle, s.maxEle);
+      minEle = Math.min(minEle, s.minEle);
+
+      const mi = Number(String(t.date).slice(5, 7)) - 1;
+      if (mi >= 0 && mi < 12) byMonth[mi] += 1;
+
+      const y = String(t.date).slice(0, 4);
+      const yv = byYear.get(y) || { n: 0, km: 0 };
+      yv.n += 1;
+      yv.km += s.distanceKm;
+      byYear.set(y, yv);
+
+      const p = provinceOf(t.region);
+      byProvince.set(p, (byProvince.get(p) || 0) + 1);
+
+      // 落在第一个「最高海拔 < 阈值」的档里；比最高档还高就归最后一档
+      let bi = ELE_BANDS.findIndex((b) => s.maxEle < b.below);
+      if (bi < 0) bi = ELE_BANDS.length - 1;
+      bands[bi] += 1;
+
+      // race（完赛比赛）和 run 在本站是同一类，口径跟列表页的 chip 对齐
+      const k = t.kind === 'race' || t.kind === 'run' ? 'run' : 'hike';
+      kinds[k].n += 1;
+      kinds[k].km += s.distanceKm;
+      kinds[k].up += s.ascentM;
     }
 
     const html = [];
+    const yearText = [...byYear.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([y, v]) => `${y} 年 ${v.n} 条`)
+      .join(' · ');
 
+    // 总量级的时间别带分钟：「373h2m」既难读又把卡片撑破，三位数的小时就地取整
+    const dur = (s) => (s >= 100 * 3600 ? `${Math.floor(s / 3600)}h` : shortDuration(s));
+
+    /* 一、数字墙：总量三件套 */
     html.push(
       kpiRow([
         { label: '轨迹', num: tracks.length, sub: '条' },
@@ -460,40 +553,99 @@
       ]),
     );
 
+    /* 二、第二排小数字：里程 / 时长 / 珠峰 */
     html.push(
       `<div class="st-inline">
-      <div><b>${km.toFixed(1)}<i>km</i></b><span>累计距离<br>山野里跑过的每一步</span></div>
-      <div><b>${sec ? shortDuration(sec) : '—'}</b><span>累计时长<br>有记录轨迹合计</span></div>
-      <div><b>${(up / 8849).toFixed(1)}<i>×</i></b><span>相当于<br>爬了 ${Math.round((up / 8849) * 10) / 10} 座珠峰</span></div>
+      <div><b>${km.toFixed(1)}<i>km</i></b><span>累计距离<br>平均每条 ${(km / tracks.length).toFixed(1)} km</span></div>
+      <div><b>${sec ? dur(sec) : '—'}</b><span>累计时长<br>移动 ${movingSec ? dur(movingSec) : '—'}${
+        movingSec ? ` · ${(movingKm / (movingSec / 3600)).toFixed(1)} km/h` : ''
+      }</span></div>
+      <div><b>${(up / 8849).toFixed(1)}<i>×</i></b><span>相当于<br>爬了 ${(up / 8849).toFixed(1)} 座珠峰</span></div>
     </div>`,
     );
 
-    // 逐条对比：爬升条（最直观的越野赛指标）
-    const maxUp = Math.max(...tracks.map((t) => t.stats.ascentM));
-    html.push(
-      section('累计爬升对比', '10 米阈值过滤抖动后累加', tracks
-        .map(
-          (t) => `<div class="st-rank__row">
-        <div class="st-rank__head"><i class="st-rank__dot" style="background:${t.color}"></i><span class="st-rank__name">${esc(t.name)}</span><span class="st-rank__n">${U.formatNumber(t.stats.ascentM)} m</span></div>
-        <div class="st-rank__track"><div class="st-rank__bar" style="width:${Math.max(4, Math.round((t.stats.ascentM / maxUp) * 100))}%"></div></div>
-      </div>`,
-        )
-        .join('')),
-    );
+    /* 三、之最：两条记录各自的极值 */
+    const longest = tracks.reduce((a, b) => (b.stats.distanceKm > a.stats.distanceKm ? b : a));
+    const climbiest = tracks.reduce((a, b) => (b.stats.ascentM > a.stats.ascentM ? b : a));
+    const md = (d) => String(d).slice(5).replace('-', '/');
 
     html.push(
-      section('距离对比', '', tracks
-        .map((t) => ({ name: t.name, count: t.stats.distanceKm }))
-        .sort((a, b) => b.count - a.count)
-        .map((t, i, arr) => {
-          const maxKm = arr[0].count;
-          return `<div class="st-rank__row">
-        <div class="st-rank__head"><i class="st-rank__idx">${i + 1}</i><span class="st-rank__name">${esc(t.name)}</span><span class="st-rank__n">${t.count} km</span></div>
-        <div class="st-rank__track"><div class="st-rank__bar" style="width:${Math.max(4, Math.round((t.count / maxKm) * 100))}%"></div></div>
-      </div>`;
-        })
-        .join('')),
+      duoCard(
+        {
+          label: '最长一次',
+          pill: md(longest.date),
+          big: esc(longest.name),
+          sub: `${longest.stats.distanceKm} km · 爬升 ${U.formatNumber(longest.stats.ascentM)} m`,
+        },
+        {
+          label: '爬升最多',
+          pill: md(climbiest.date),
+          big: esc(climbiest.name),
+          sub: `${U.formatNumber(climbiest.stats.ascentM)} m · ${climbiest.stats.distanceKm} km`,
+        },
+      ),
     );
+
+    /* 四、月度分布：一年里哪几个月在山里 */
+    html.push(
+      section(
+        '月度分布',
+        yearText,
+        colBars(byMonth, ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'], {
+          variant: 'st-hours--month',
+        }),
+      ),
+    );
+
+    /* 五、运动构成：徒步 vs 越野跑（42px 的窄名列放不下长标签，距离爬升放 hint 里讲） */
+    const kindRows = [
+      { name: '徒步', count: kinds.hike.n },
+      { name: '越野跑', count: kinds.run.n },
+    ].filter((r) => r.count > 0);
+
+    html.push(
+      section(
+        '运动构成',
+        `徒步 ${Math.round(kinds.hike.km)} km · 越野跑 ${Math.round(kinds.run.km)} km`,
+        shareBars(kindRows, { unit: '条' }),
+      ),
+    );
+
+    /* 六、爬升密度：越野跑者真正在意的指标——每公里要爬多少米 */
+    const density = tracks
+      .map((t) => ({ name: t.name, count: Math.round(t.stats.ascentM / Math.max(0.1, t.stats.distanceKm)), t }))
+      .sort((a, b) => b.count - a.count);
+    html.push(
+      section('爬升密度', '每公里要爬多少米 · 越陡越靠前', rankBars(density, { unit: 'm/km' })),
+    );
+
+    /* 七、海拔区间：这一天最高到了哪儿 */
+    html.push(
+      section(
+        '海拔区间',
+        `最低到过 ${U.formatNumber(minEle)} m · 累计下降 ${U.formatNumber(dn)} m`,
+        shareBars(
+          ELE_BANDS.map((b, i) => ({ name: b.label, count: bands[i] })).filter((r) => r.count > 0),
+          { unit: '条' },
+        ),
+      ),
+    );
+
+    /* 八、去过的山：省级行政区 */
+    const provinces = [...byProvince.entries()].sort((a, b) => b[1] - a[1]);
+    html.push(
+      section(
+        '去过的山',
+        `共 ${provinces.length} 个省级行政区`,
+        rankBars(provinces.map(([name, count]) => ({ name, count })), { unit: '条' }),
+      ),
+    );
+
+    /* 九、越野跑成绩：ITRA 官方数据，按表现指数排 */
+    const races = tracks.filter((t) => t.itra).sort((a, b) => b.itra.perf - a.itra.perf);
+    if (races.length) {
+      html.push(section('越野跑成绩', `ITRA · ${races.length} 场有官方记录`, itraBoard(races)));
+    }
 
     return `<div class="st-page">${html.join('')}</div>`;
   }

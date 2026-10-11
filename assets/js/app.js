@@ -682,33 +682,13 @@
   /* 视图：足迹                                                          */
   /* ------------------------------------------------------------------ */
 
-  /** 足迹统计 body：纯数字汇总（去休息移动口径），不渲染地图。 */
-  function trackStatsBody(list) {
-    const sum = (f) => list.reduce((a, t) => a + (f(t.stats) || 0), 0);
-    const totalKm = sum((s) => s.distanceKm);
-    const totalAscent = sum((s) => s.ascentM);
-    const movingSec = sum((s) => s.movingTimeSec);
-    const movingKm = sum((s) => s.movingDistanceKm);
-    const races = list.filter((t) => t.kind === 'race').length;
-    const longest = list.slice().sort((a, b) => b.stats.distanceKm - a.stats.distanceKm)[0];
-    const stat = (label, value, unit, foot) =>
-      `<div class="stat"><div class="stat__label">${label}</div><div class="stat__value">${value}<small>${unit}</small></div><div class="stat__foot">${foot}</div></div>`;
-    return `<div class="stat-grid">
-      ${stat('轨迹条数', list.length, '条', `徒步 ${list.length - races} · 越野跑 ${races}`)}
-      ${stat('总里程', U.formatNumber(Math.round(totalKm)), 'km', `最长 ${esc(longest.name)} ${longest.stats.distanceKm} km`)}
-      ${stat('总爬升', U.formatNumber(Math.round(totalAscent)), 'm', `平均每条 ${Math.round(totalAscent / list.length)} m`)}
-      ${stat('移动时间', (movingSec / 3600).toFixed(0), 'h', '已剔除休息 / 过夜（间隔 >10 分钟）')}
-      ${stat('平均移动速度', movingSec ? (movingKm / (movingSec / 3600)).toFixed(2) : '—', 'km/h', `移动里程 ${U.formatNumber(Math.round(movingKm))} km`)}
-    </div>`;
-  }
-
   function viewTracks() {
     if (!tracks.length) {
       return '<div class="wrap"><div class="empty">还没有轨迹。把 GPX 放进 tools/source/ 再跑一次构建脚本。</div></div>';
     }
 
     if (state.trackView === 'stats') {
-      return statsPage('tracks', 'stats', trackStatsBody(tracks));
+      return statsPage('tracks', 'stats', M.stats.trackView(tracks));
     }
 
     let tlist = tracks;
