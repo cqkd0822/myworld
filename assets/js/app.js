@@ -42,7 +42,12 @@
   const flights = U.buildFlights();
   const rails = U.buildRail();
   const voided = U.buildVoided();
-  const tracks = M.tracks || [];
+  // 轨迹按日期倒序（新的在前），与航班/铁路口径一致。
+  // tracks.js 是构建脚本按 MANIFEST 顺序导出的（录入批次），直接渲染年份会来回跳，
+  // 所以这里先排一次；列表视图再按年份分组。
+  const tracks = (M.tracks || [])
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const overview = U.computeOverview(flights, rails, tracks);
 
   const flightYears = [...overview.flightsByYear.keys()].sort((a, b) => b - a);
@@ -217,8 +222,8 @@
 </article>`;
   }
 
-  /** 按年份分组渲染一串卡片 */
-  function grouped(items, renderCard, getDate) {
+  /** 按年份分组渲染一串卡片。unit 是年份头上的计数单位（航班/铁路「段」，轨迹「条」） */
+  function grouped(items, renderCard, getDate, unit = '段') {
     const byYear = new Map();
     for (const it of items) {
       const d = getDate(it);
@@ -234,7 +239,7 @@
         (y) => `<section>
   <div class="year-head">
     <span>${y} 年</span>
-    <span class="year-head__count">${byYear.get(y).length} 段</span>
+    <span class="year-head__count">${byYear.get(y).length} ${unit}</span>
     <span class="year-head__rule"></span>
   </div>
   <div class="group">${byYear.get(y).map(renderCard).join('')}</div>
@@ -706,17 +711,16 @@
       tlist = tlist.filter((t) => [t.name, t.region, t.date].join(' ').toLowerCase().includes(q));
     }
 
-    const cards = tlist
-      .map((t) => {
-        const s = t.stats;
-        const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(1) : null;
-        // ITRA 摘要：积分读到了就显示，没读到（null）只留表现与等强配速
-        const itraLine = t.itra
-          ? `<div class="track__itra">ITRA${
-              t.itra.points == null ? '' : ` ${t.itra.points} 分 ·`
-            } 表现 ${t.itra.perf} · 等强 ${t.itra.equivPace} · 总排名 ${t.itra.overall}</div>`
-          : '';
-        return `<button class="track" data-track="${esc(t.id)}">
+    const trackCard = (t) => {
+      const s = t.stats;
+      const mv = s.movingSpeedKmh ? s.movingSpeedKmh.toFixed(1) : null;
+      // ITRA 摘要：积分读到了就显示，没读到（null）只留表现与等强配速
+      const itraLine = t.itra
+        ? `<div class="track__itra">ITRA${
+            t.itra.points == null ? '' : ` ${t.itra.points} 分 ·`
+          } 表现 ${t.itra.perf} · 等强 ${t.itra.equivPace} · 总排名 ${t.itra.overall}</div>`
+        : '';
+      return `<button class="track" data-track="${esc(t.id)}">
   <div class="track__head">
     <div class="track__pill" style="background:${t.color}">${icon.pin}</div>
     <div style="flex:1;min-width:0">
@@ -724,20 +728,19 @@
       <div class="track__region">${esc(t.region)} · ${esc(t.date)}</div>
     </div>
     <span class="tag ${(KIND_TAG[t.kind] || ['轨迹', 'tag--neutral'])[1]}">${
-          (KIND_TAG[t.kind] || ['轨迹'])[0]
-        }</span>
+        (KIND_TAG[t.kind] || ['轨迹'])[0]
+      }</span>
   </div>
   <div class="track__stats">
     <div class="track__stat"><b>${s.distanceKm}</b><span>公里</span></div>
     <div class="track__stat"><b>${U.formatNumber(s.ascentM)}</b><span>爬升 m</span></div>
     <div class="track__stat"><b>${mv || (s.durationSec ? U.formatSeconds(s.durationSec) : '—')}</b><span>${
-          mv ? 'km/h 移动' : '用时'
-        }</span></div>
+        mv ? 'km/h 移动' : '用时'
+      }</span></div>
   </div>
   ${itraLine}
 </button>`;
-      })
-      .join('');
+    };
 
     return `<div class="wrap">
   <div class="listhead">
@@ -757,7 +760,11 @@
       Math.round(tlist.reduce((s, t) => s + t.stats.distanceKm, 0)),
     )} 公里</span>
   </div>
-  <div class="group">${cards}</div>
+  ${
+    tlist.length
+      ? grouped(tlist, trackCard, (t) => ({ year: t.date ? String(t.date).slice(0, 4) : '未知' }), '条')
+      : '<div class="empty">这个筛选条件下没有记录</div>'
+  }
 </div>`;
   }
 

@@ -673,7 +673,7 @@ const MANIFEST = [
   {
     id: "2026-03-27-chuanxi-xiaojinshan",
     file: "川西小金山萨武神山攀登.gpx",
-    name: "川西小金山",
+    name: "川西萨武深山",
     date: "2026-03-27",
     region: "四川 · 阿坝",
     kind: "hike",
