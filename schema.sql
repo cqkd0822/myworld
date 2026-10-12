@@ -39,8 +39,9 @@ CREATE TABLE IF NOT EXISTS rail_voided (
   reason       TEXT DEFAULT ''
 );
 
--- 轨迹只存元数据与统计；几何(paths/profile)体积大，Phase 1 仍由
--- 生成态 tracks.js / 后续 R2 提供，D1 不重复存。
+-- 轨迹表只存**元数据与统计**。几何不存两份：
+-- 原始点在 track_raw（唯一的真源），渲染用的抽稀 paths / 海拔剖面由
+-- Worker 在 /api/tracks/:id/geometry 里现算并交给边缘缓存。
 CREATE TABLE IF NOT EXISTS tracks (
   id               TEXT PRIMARY KEY,
   name             TEXT NOT NULL,
@@ -68,8 +69,19 @@ CREATE TABLE IF NOT EXISTS tracks (
   ele_threshold_m  REAL,
   center_lat       REAL,
   center_lng       REAL,
-  center_zoom      REAL,
-  geom_json        TEXT                 -- paths/profile/waypoints JSON（R2 开通前暂存）
+  center_zoom      REAL
+);
+
+-- 原始轨迹点：一个 trkseg 一行，各自独立 gzip，避免撞 D1 单行 2 MB 上限。
+-- 编码格式（1e-6 度增量整数 + 0.1 m 海拔 + 秒级时间增量）与精度论证见 src/raw.js。
+-- 61 条轨迹合计 0.74 MB，最大单行 70 KB。
+CREATE TABLE IF NOT EXISTS track_raw (
+  id       TEXT    NOT NULL,
+  part     INTEGER NOT NULL,
+  points   INTEGER NOT NULL,
+  gzip_b64 TEXT    NOT NULL,
+  sha1     TEXT,
+  PRIMARY KEY (id, part)
 );
 
 -- 发布元信息：published_at / version / 数据来源快照 hash

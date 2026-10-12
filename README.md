@@ -16,15 +16,22 @@ Cloudflare Worker 「myworld」            Cloudflare D1 「myworld」
  │   (Workers Static Assets,              ├─ rail         铁路
  │    仓库根目录 + .assetsignore)         ├─ rail_voided  未成行原票
  ├─ /api/flights        ┐                  ├─ tracks       轨迹元数据+统计
- ├─ /api/rail           │  只读接口，       │   └ geom_json 轨迹几何(JSON)
+ ├─ /api/rail           │  只读接口，       ├─ track_raw    原始轨迹点(唯一几何真源)
  ├─ /api/rail-voided    │  返回与旧明文     └─ meta         发布元信息
  ├─ /api/tracks         │  数组同构的 JSON
- └─ /api/tracks/:id/geometry   轨迹几何按需取
+ └─ /api/tracks/:id/raw   原始点下发；抽稀/剖面在**浏览器**算
 ```
 
 - **数据真源 = D1**。仓库里**不再有明文行程数组**（旧 `assets/data/{flights,rail,tracks}.js` 已退役）。
 - 前端启动时异步 `fetch /api/*`（同域、4 秒超时）；形状与旧数组同构，视图层零改动。
-- 轨迹几何（paths/profile/waypoints）存 `tracks.geom_json`，**进详情页才拉**，首屏因此少约 600 KB。
+- **几何只存一份**：`track_raw` 里是原始点的紧凑编码（1e-6 度增量整数 + 0.1 m 海拔 +
+  秒级时间增量，gzip+base64；61 条合计 0.74 MB，最大单行 70 KB）。抽稀 paths 与海拔剖面
+  是**构建产物**，既不落库也不在边缘算（Workers 免费档每次调用只有 10 ms CPU，最长那条
+  轨迹要算约 30 ms）：`/api/tracks/:id/raw` 把原始点原样下发（ETag + immutable），
+  前端用同一份算法源码（`src/geo.mjs` → `assets/js/geo.js`）本地抽稀、算剖面，
+  桌面实测最长一条 11 ms。61/61 条浏览器重算结果与全精度 GPX 直接算**逐字节一致**，
+  所以库里没有第二份几何。编码与精度论证见 `src/raw.js`。
+- 列表接口只取元数据：`/api/tracks` 响应约 34 KB，几何**进详情页才拉**（9~15 KB/条）。
 - Service Worker：`/api/*` network-first（数据要新鲜）、静态 cache-first（装过一次断网可看）。
 - **GitHub 的角色**：代码 + 原始 GPX 存档（`tools/source/`）+ 种子 SQL + 精简 GPX（`gpx/` 供下载）。
 - **R2 暂搁置**：开通需 Dashboard 绑付款方式；等大对象（原始 GPX/截图）需要时再迁。
@@ -45,6 +52,7 @@ P=/tmp/wrangler-persist
 npx wrangler d1 execute myworld --local --persist-to $P --file=schema.sql
 npx wrangler d1 execute myworld --local --persist-to $P --file=seed.sql
 npx wrangler d1 execute myworld --local --persist-to $P --file=seed-tracks.sql
+npx wrangler d1 execute myworld --local --persist-to $P --file=seed-raw.sql
 npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://localhost:8787
 ```
 
@@ -54,7 +62,9 @@ npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://loca
 
 | 数据 | 当前做法 |
 |---|---|
-| 轨迹 | 原始 GPX 放 `tools/source/` → `MANIFEST` 加一行 → `node tools/build-tracks.mjs` 生成 `seed-tracks.sql` → `npx wrangler d1 execute myworld --remote --file=seed-tracks.sql`；精简 GPX 自动写 `gpx/` |
+| 轨迹 | 原始 GPX 放 `tools/source/` → `MANIFEST` 加一行 → `node tools/build-tracks.mjs` 生成 `seed-tracks.sql`（元数据+统计）与 `seed-raw.sql`（原始点）→ 依次 `wrangler d1 execute myworld --remote --file=...` 入库；精简 GPX 自动写 `gpx/` |
+| 改统计/抽稀口径 | 构建期改 `MANIFEST` 的 `toleranceM` / `eleThresholdM` → 重跑 build → 重灌两份种子（边缘 10 ms CPU 扛不住万点级全量重算，不放服务端） |
+| 改几何算法 | 只改 `src/geo.mjs` / `src/raw.js`，然后 `node tools/build-browser-geo.mjs` 重新生成浏览器包，再 `node tools/bump-cache.mjs` |
 | 航班 / 铁路 | 直接改 D1（Dashboard 控制台或 `wrangler d1 execute`）；`seed.sql` 只是历史种子。/admin 上传+视觉抽取在做 |
 | 航班备注 | `flights.note` 列，页面卡片自动显示（如「华夏基石出差」） |
 | 城市词典 | `assets/data/airports.js`（仍打包，改完跑 `node tools/bump-cache.mjs`） |
@@ -88,5 +98,6 @@ npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://loca
 - [ ] /admin：GPX/截图上传 → 解析/视觉抽取 → 草稿确认 → 写 D1
 - [ ] R2（开通后）：原始 GPX / 截图 / 生成物
 - [ ] nightly cron：D1 快照镜像 commit 回 GitHub（恢复 git diff 审计）
+- [x] 几何只存一份：`track_raw` 为唯一真源，渲染几何在浏览器现算（2026-10）
 - [ ] 实际航程口径（AeroAPI 或系数估算）
 - [ ] og:url / og:image（需要最终域名）

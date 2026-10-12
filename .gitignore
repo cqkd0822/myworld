@@ -15,5 +15,6 @@ node_modules/
 # 令牌绝对不能进仓库 —— README 里有说明
 .env
 .env.*
+.dev.vars
 *.token
 .wrangler/

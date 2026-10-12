@@ -8,7 +8,7 @@ tools
 migrations
 schema.sql
 seed.sql
-seed-geom.sql
+seed-raw.sql
 seed-tracks.sql
 wrangler.toml
 .assetsignore

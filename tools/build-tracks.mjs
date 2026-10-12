@@ -9,8 +9,14 @@
  *   1. 解析原始 GPX（含多段与航点）
  *   2. 用**原始几何**算距离、爬升（爬升另加海拔阈值过滤）
  *   3. 用原始几何抽稀后画图，另出一份**只平滑海拔**的数据画剖面
- *   4. 输出 assets/data/tracks.js（含坐标、海拔剖面、航点），
+ *   4. 输出两份 SQL 种子：
+ *        seed-tracks.sql —— 元数据 + 统计（进 tracks 表）
+ *        seed-raw.sql    —— 原始点的紧凑编码（进 track_raw 表，唯一的几何真源）
  *      以及 gpx/ 下的精简版 GPX 供下载
+*
+* 渲染几何（抽稀 paths / 海拔剖面）**不落库**：Worker 从 track_raw 现算，
+* 见 src/worker.js。构建期仍然算一遍，因为 shown_points / center / 精简 GPX
+* 都要用它，同时也是一次「构建期与线上算法必须一致」的自检。
  *
  * 为什么不先平滑再算距离：实测一条 337 公里的越野赛道（TOR330，2026-10 已下线），5 点滑动平均
  * 会把距离压到 310 公里（少 8%）——平滑在盘山发卡弯处抄了近道。原始 GPS
@@ -35,7 +41,8 @@ import {
   toMapPaths,
   waypointsToMap,
   writeGpx,
-} from './geo.mjs';
+} from '../src/geo.mjs';
+import { packSegment } from '../src/raw.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -840,6 +847,11 @@ function isoOrNull(v) {
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
+/** 段数合计，只为最后打一行日志 */
+function parts_count(rows) {
+  return rows.reduce((n, r) => n + r.parts.length, 0);
+}
+
 /* ------------------------------------------------------------------ */
 /* 主流程                                                              */
 /* ------------------------------------------------------------------ */
@@ -851,6 +863,7 @@ if (!existsSync(SOURCE_DIR)) {
 mkdirSync(GPX_OUT_DIR, { recursive: true });
 
 const tracks = [];
+const rawRows = [];
 let failures = 0;
 
 for (const item of MANIFEST) {
@@ -902,6 +915,13 @@ for (const item of MANIFEST) {
     failures += 1;
     continue;
   }
+
+  // 原始点打包：一个 trkseg 一行，各自独立 gzip（编码见 src/raw.js）
+  const rawParts = [];
+  for (const seg of rawSegments) {
+    if (seg.length) rawParts.push(await packSegment(seg));
+  }
+  rawRows.push({ id: item.id, parts: rawParts });
 
   // 精简 GPX 落盘，供下载 / 导入其他软件
   const gpxName = `${item.id}.gpx`;
@@ -971,13 +991,12 @@ function sqlq(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-// 真源是 D1：这里生成 seed-tracks.sql（元数据 + geom_json），
+// 真源是 D1：这里生成 seed-tracks.sql（元数据 + 统计），
 // 用 `wrangler d1 execute myworld --remote --file=seed-tracks.sql` 入库。
-// 仓库里不再保留明文 tracks.js。
+// 仓库里不再保留明文 tracks.js，也不再存渲染几何。
 const lines = ['DELETE FROM tracks;'];
 for (const t of tracks) {
   const s2 = t.stats;
-  const geom = JSON.stringify({ paths: t.paths, profile: t.profile, waypoints: t.waypoints });
   lines.push(
     'INSERT INTO tracks VALUES (' +
       [
@@ -989,13 +1008,41 @@ for (const t of tracks) {
         sqlq(s2.rawPoints), sqlq(s2.shownPoints), sqlq(s2.segments), sqlq(s2.gpx),
         sqlq(s2.toleranceM), sqlq(s2.eleThresholdM),
         sqlq(t.center.lat), sqlq(t.center.lng), sqlq(t.center.zoom),
-        sqlq(geom),
       ].join(',') +
       ');',
   );
 }
 const sql = lines.join('\n') + '\n';
 writeFileSync(join(ROOT, 'seed-tracks.sql'), sql, 'utf8');
+
+/* ------------------------------------------------------------------ */
+/* 原始点：seed-raw.sql（track_raw）                                    */
+/* ------------------------------------------------------------------ */
+
+// 一行一个 trkseg。gzip_b64 是纯 base64，不含单引号，直接进 SQL 字面量。
+const rawLines = ['DELETE FROM track_raw;'];
+let rawBytes = 0;
+let maxRowBytes = 0;
+let maxRowId = '';
+for (const { id, parts } of rawRows) {
+  parts.forEach((p, i) => {
+    rawBytes += p.b64.length;
+    if (p.b64.length > maxRowBytes) {
+      maxRowBytes = p.b64.length;
+      maxRowId = id;
+    }
+    rawLines.push(
+      `INSERT INTO track_raw (id,part,points,gzip_b64,sha1) VALUES (` +
+        `${sqlq(id)},${i},${p.points},${sqlq(p.b64)},${sqlq(p.sha1)});`,
+    );
+  });
+}
+writeFileSync(join(ROOT, 'seed-raw.sql'), rawLines.join('\n') + '\n', 'utf8');
+
+console.log(
+  `\n→ track_raw：${rawRows.length} 条轨迹 / ${rawBytes ? parts_count(rawRows) : 0} 段，` +
+    `base64 合计 ${(rawBytes / 1048576).toFixed(2)} MB，最大单行 ${(maxRowBytes / 1024).toFixed(0)} KB（${maxRowId}）`,
+);
 
 if (failures > 0) {
   console.error(`\n⚠ ${failures} 条轨迹处理失败，请检查上面的报错。`);

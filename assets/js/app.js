@@ -90,17 +90,28 @@
     }
   }
 
-  /** 轨迹几何按需取：列表/统计只用 meta，进详情才拉 paths/profile/waypoints */
+  /**
+   * 轨迹几何按需取：Worker 只发原始点（track_raw），抽稀与海拔剖面在浏览器算。
+   *
+   * 为什么不在边缘算：Workers 免费档每次调用只有 10 ms CPU，而最长那条轨迹
+   * （五台山逆朝 14162 点）抽稀+剖面要约 30 ms，放边缘必然被掐死；放前端
+   * 一次几十毫秒，比加载腾讯地图 GL 便宜一个量级，而且换抽稀容差不用回服务端。
+   * 算法与 Node 构建是同一份源码（src/geo.mjs），见 tools/build-browser-geo.mjs。
+   */
   async function ensureGeometry(t) {
     if (!t) return false;
     if (t.paths) return true;
     try {
-      const res = await fetch(`/api/tracks/${encodeURIComponent(t.id)}/geometry`);
+      const res = await fetch(`/api/tracks/${encodeURIComponent(t.id)}/raw`);
       if (!res.ok) return false;
       const g = await res.json();
-      t.paths = g.paths;
-      t.profile = g.profile;
-      t.waypoints = g.waypoints || [];
+      const segments = await M.raw.unpackParts(g.parts);
+      const tol = g.toleranceM || 5;
+      t.paths = M.geo.toMapPaths(M.geo.simplifySegments(segments, tol), 5);
+      t.profile = M.geo
+        .elevationProfile(M.geo.smoothElevation(segments, 9), 200)
+        .map(([d, ele]) => [Math.round(d * 1000) / 1000, Math.round(ele * 10) / 10]);
+      t.waypoints = [];
       return true;
     } catch (e) {
       return false;
