@@ -135,8 +135,14 @@ node tools/build-tracks.mjs
   前端切换数据源时视图层零改动（Phase 2 做）。
 - 种子 / 重建：`node tools/seed-d1.mjs` 生成 `seed.sql`，
   `npx wrangler d1 execute myworld --remote --file=seed.sql` 灌入。
-- GPX 几何（paths/profile）体积大，Phase 1 仍由生成态 `tracks.js` 提供，
-  Phase 2 迁 R2；截图视觉抽取与 /admin 确认页在 Phase 2/3。
+- 轨迹几何（paths/profile/waypoints）存在 D1 的 `geom_json` 列（migrations/002），
+  按需取：`/api/tracks/:id/geometry`。站点本体（含 GPX 原始文件与生成态
+  tracks.js）**继续以 GitHub 文件为存储**。
+- **R2 暂搁置**：开通 R2 需要在 Dashboard 绑定付款方式（免费额度也要），
+  暂不具备；等开通后再把原始 GPX / 截图等大对象迁过去。
+- Worker 根路径 `/` 是接口索引页。注意：`*.workers.dev` 在部分公司网络
+  被封（与 SSH 出站同一类拦截），本机打不开属网络问题；换热点或以后
+  绑自定义域名即可。正确地址是 **myworld-api**.tw2d9fp8ht.workers.dev。
 - 凭据只放本地 `.env`（已 gitignore，600 权限），**不要提交**。
 
 > 注意：某些公司网络会封 `*.workers.dev` 与 SSH 出站；本机验证用

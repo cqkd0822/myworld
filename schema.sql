@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS tracks (
   ele_threshold_m  REAL,
   center_lat       REAL,
   center_lng       REAL,
-  center_zoom      REAL
+  center_zoom      REAL,
+  geom_json        TEXT                 -- paths/profile/waypoints JSON（R2 开通前暂存）
 );
 
 -- 发布元信息：published_at / version / 数据来源快照 hash

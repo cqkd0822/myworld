@@ -20,6 +20,22 @@ export default {
         },
       });
 
+    if (path === '/' || path === '') {
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><title>MyWorld API</title>' +
+        '<body style="font-family:-apple-system,PingFang SC,sans-serif;background:#0c1220;color:#eef2f9;padding:40px">' +
+        '<h1>MyWorld API</h1><p>只读接口，数据主存储镜像在 Cloudflare D1 <code>myworld</code>。</p><ul>' +
+        '<li><a style="color:#5aa2ff" href="/api/health">/api/health</a></li>' +
+        '<li><a style="color:#5aa2ff" href="/api/flights">/api/flights</a>（100 段，与站点数据同构）</li>' +
+        '<li><a style="color:#5aa2ff" href="/api/rail">/api/rail</a>（53 段）</li>' +
+        '<li><a style="color:#5aa2ff" href="/api/rail-voided">/api/rail-voided</a>（23 条）</li>' +
+        '<li><a style="color:#5aa2ff" href="/api/tracks">/api/tracks</a>（61 条元数据）</li>' +
+        '<li>/api/tracks/:id/geometry（轨迹几何，按需加载）</li></ul>' +
+        '<p style="color:#667089">站点本体仍由 Cloudflare Pages + GitHub 文件提供；本 Worker 只是服务端读模型。</p>',
+        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+      );
+    }
+
     if (request.method !== 'GET') {
       return new Response('method not allowed', { status: 405 });
     }
@@ -77,6 +93,19 @@ export default {
             center: { lat: x.center_lat, lng: x.center_lng, zoom: x.center_zoom },
           })),
         );
+      }
+
+      const gm = path.match(/^\/api\/tracks\/([^/]+)\/geometry$/);
+      if (gm) {
+        const row = await env.DB.prepare('SELECT geom_json FROM tracks WHERE id = ?').bind(decodeURIComponent(gm[1])).first();
+        if (!row || !row.geom_json) return new Response('not found', { status: 404 });
+        return new Response(row.geom_json, {
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'public, max-age=86400',
+            'access-control-allow-origin': '*',
+          },
+        });
       }
 
       return new Response('not found', { status: 404 });
