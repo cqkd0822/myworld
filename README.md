@@ -124,6 +124,24 @@ node tools/build-tracks.mjs
 
 ---
 
+## 服务端与 D1（Phase 1，2026-10-12 起）
+
+本站开始从「纯静态 + GitHub 当存储」向「Cloudflare 主存储」迁移，**Phase 1 已完成**：
+
+- **D1 数据库 `myworld`**（APAC）是航班 / 铁路 / 轨迹元数据的主存储镜像，
+  表结构见 `schema.sql`，字段与 `assets/data/*.js` 的数组顺序一一对应。
+- **Worker `myworld-api`** 提供只读接口，返回与现有数据文件**完全同构**的 JSON：
+  `/api/health`、`/api/flights`、`/api/rail`、`/api/rail-voided`、`/api/tracks`。
+  前端切换数据源时视图层零改动（Phase 2 做）。
+- 种子 / 重建：`node tools/seed-d1.mjs` 生成 `seed.sql`，
+  `npx wrangler d1 execute myworld --remote --file=seed.sql` 灌入。
+- GPX 几何（paths/profile）体积大，Phase 1 仍由生成态 `tracks.js` 提供，
+  Phase 2 迁 R2；截图视觉抽取与 /admin 确认页在 Phase 2/3。
+- 凭据只放本地 `.env`（已 gitignore，600 权限），**不要提交**。
+
+> 注意：某些公司网络会封 `*.workers.dev` 与 SSH 出站；本机验证用
+> `wrangler d1 execute --local` + `wrangler dev`（本地 D1 + localhost）完成。
+
 ## 离线与缓存
 
 - **Service Worker（sw.js）**：同源 GET 一律 cache-first，导航请求 network-first、

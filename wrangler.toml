@@ -1,0 +1,11 @@
+# MyWorld API Worker —— D1 为主存储的读接口（Phase 1）
+# 后续 Phase 会在这里加 R2 bindings、Queues（大 GPX 异步解析）、Workers AI（截图视觉抽取）
+name = "myworld-api"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+# database_id 由 `wrangler d1 create myworld` 之后回填
+[[d1_databases]]
+binding = "DB"
+database_name = "myworld"
+database_id = "de16c23c-dc6c-414c-9eb6-0cec46023879"
