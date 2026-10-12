@@ -45,6 +45,22 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // /api/* 要新鲜：network-first，成功写缓存，断网回落上次结果
+  if (url.pathname.startsWith('/api/')) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req)),
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(req).then(
       (hit) =>

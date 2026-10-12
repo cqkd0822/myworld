@@ -39,20 +39,73 @@
   /* 数据准备                                                            */
   /* ------------------------------------------------------------------ */
 
-  const flights = U.buildFlights();
-  const rails = U.buildRail();
-  const voided = U.buildVoided();
-  // 轨迹按日期倒序（新的在前），与航班/铁路口径一致。
-  // tracks.js 是构建脚本按 MANIFEST 顺序导出的（录入批次），直接渲染年份会来回跳，
-  // 所以这里先排一次；列表视图再按年份分组。
-  const tracks = (M.tracks || [])
-    .slice()
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  const overview = U.computeOverview(flights, rails, tracks);
+  // 数据真源在 D1（/api/*），启动时异步拉取；形状与旧明文数组同构，
+  // 视图层因此完全不用改。拉不到时保持空数组并在页面上提示。
+  let flights = [];
+  let rails = [];
+  let voided = [];
+  let tracks = [];
+  let overview = null;
+  let flightYears = [];
+  let railYears = [];
+  let airlineNames = [];
 
-  const flightYears = [...overview.flightsByYear.keys()].sort((a, b) => b - a);
-  const railYears = [...overview.railsByYear.keys()].sort((a, b) => b - a);
-  const airlineNames = overview.airlines.map((a) => a[0]);
+  function initDatas() {
+    flights = U.buildFlights();
+    rails = U.buildRail();
+    voided = U.buildVoided();
+    // 轨迹按日期倒序（新的在前），与航班/铁路口径一致。
+    // D1 返回顺序不保证录入批次，这里统一排一次；列表视图再按年份分组。
+    tracks = (M.tracks || [])
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    overview = U.computeOverview(flights, rails, tracks);
+    flightYears = [...overview.flightsByYear.keys()].sort((a, b) => b - a);
+    railYears = [...overview.railsByYear.keys()].sort((a, b) => b - a);
+    airlineNames = overview.airlines.map((a) => a[0]);
+  }
+
+  /** 同域 API；4 秒超时，workers.dev 被掐的网络上也不会拖死首屏 */
+  async function loadRemote() {
+    if (location.protocol === 'file:') return false;
+    const opt =
+      typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+        ? { signal: AbortSignal.timeout(4000) }
+        : {};
+    try {
+      const [f, r, v, t] = await Promise.all([
+        fetch('/api/flights', opt),
+        fetch('/api/rail', opt),
+        fetch('/api/rail-voided', opt),
+        fetch('/api/tracks', opt),
+      ]);
+      if (!f.ok || !r.ok || !v.ok || !t.ok) return false;
+      M.flights = await f.json();
+      M.rail = await r.json();
+      M.railVoided = await v.json();
+      M.tracks = await t.json();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** 轨迹几何按需取：列表/统计只用 meta，进详情才拉 paths/profile/waypoints */
+  async function ensureGeometry(t) {
+    if (!t) return false;
+    if (t.paths) return true;
+    try {
+      const res = await fetch(`/api/tracks/${encodeURIComponent(t.id)}/geometry`);
+      if (!res.ok) return false;
+      const g = await res.json();
+      t.paths = g.paths;
+      t.profile = g.profile;
+      t.waypoints = g.waypoints || [];
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   /** 视图状态。切标签/筛选只改这个对象，然后整体重渲染。 */
   const state = {
@@ -941,6 +994,16 @@
     const route = currentRoute();
     const view = document.getElementById('view');
 
+    // 详情页先确保几何到位，否则地图/剖面/补给点列表画不出来
+    if (route.detail) {
+      const t0 = tracks.find((x) => x.id === route.trackId);
+      if (t0 && !t0.paths) {
+        view.innerHTML = '<div class="boot">正在加载轨迹几何…</div>';
+        ensureGeometry(t0).then(() => render());
+        return;
+      }
+    }
+
     // 换页前先释放地图实例，否则每进一次详情就多留一个 WebGL context
     if (mapRef) {
       M.map.destroy();
@@ -1154,9 +1217,11 @@
 
   window.addEventListener('hashchange', render);
 
-  function boot() {
+  async function boot() {
     const el = document.getElementById('boot');
     try {
+      await loadRemote();
+      initDatas();
       render();
       if (el && el.parentNode) el.remove();
     } catch (err) {

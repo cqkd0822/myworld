@@ -964,41 +964,38 @@ if (tracks.length === 0) {
 /* 写出数据文件                                                        */
 /* ------------------------------------------------------------------ */
 
-const json = JSON.stringify(tracks);
+/** SQL 字面量转义：单引号翻倍；null/数字原样 */
+function sqlq(v) {
+  if (v === null || v === undefined) return 'NULL';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
 
-const header = `/**
- * 轨迹数据 —— 由 tools/build-tracks.mjs 自动生成，请不要手改。
- *
- * 重新生成：node tools/build-tracks.mjs
- * 源文件在 tools/source/，轨迹清单在该脚本的 MANIFEST 里。
- *
- * 几个字段的口径，避免后面自己看糊涂：
- *   paths      —— 原始几何抽稀后的坐标，已转成 GCJ-02（腾讯地图坐标系）。
- *                 用它画线，形状是对的。
- *   profile    —— [[累计公里, 海拔米], ...]，200 个采样点。距离刻度来自原始
- *                 几何，只有海拔值被轻微抹平过，纯粹为了让曲线别全是毛刺。
- *   stats.distanceKm —— 原始点间距直接累加，未平滑。
- *   stats.ascentM    —— 带海拔阈值过滤（见 eleThresholdM，默认 10 米），
- *                 低于阈值的起伏算高度抖动，不计入爬升。
- *                 爬升这个数在不同工具间天然对不齐，看的时候记得带上阈值口径。
- *   rawPoints  —— 原始记录点数；shownPoints —— 实际发给浏览器的点数。
- *   kind       —— "race" 本人跑过的记录，"course" 赛事官方路线（无时间戳，
- *                 所以 durationSec 为 null，页面不会显示配速）。
- *   itra       —— ITRA 官方成绩（越野跑比赛才有）：points 积分、perf 表现指数、
- *                 equivPace 等强配速、overall/gender/ageRank 排名、mountain 山地指数。
- *                 数据来自 ITRA athlete 6845683（LEI Ting），逐场从页面录入。
- */
-
-window.MYWORLD = window.MYWORLD || {};
-
-window.MYWORLD.tracks = ${json};
-`;
-
-writeFileSync(DATA_OUT, header, 'utf8');
-
-const outKb = (Buffer.byteLength(header, 'utf8') / 1024).toFixed(0);
-console.log(`\n✓ 已写出 assets/data/tracks.js（${outKb} KB，${tracks.length} 条轨迹）`);
-console.log(`✓ 精简 GPX 已写入 gpx/`);
+// 真源是 D1：这里生成 seed-tracks.sql（元数据 + geom_json），
+// 用 `wrangler d1 execute myworld --remote --file=seed-tracks.sql` 入库。
+// 仓库里不再保留明文 tracks.js。
+const lines = ['DELETE FROM tracks;'];
+for (const t of tracks) {
+  const s2 = t.stats;
+  const geom = JSON.stringify({ paths: t.paths, profile: t.profile, waypoints: t.waypoints });
+  lines.push(
+    'INSERT INTO tracks VALUES (' +
+      [
+        sqlq(t.id), sqlq(t.name), sqlq(t.date), sqlq(t.region), sqlq(t.kind), sqlq(t.color),
+        sqlq(t.startTime), sqlq(t.endTime),
+        sqlq(s2.distanceKm), sqlq(s2.ascentM), sqlq(s2.descentM), sqlq(s2.minEle), sqlq(s2.maxEle),
+        sqlq(s2.durationSec), sqlq(s2.movingTimeSec), sqlq(s2.movingDistanceKm),
+        sqlq(s2.movingSpeedKmh), sqlq(s2.restTimeSec),
+        sqlq(s2.rawPoints), sqlq(s2.shownPoints), sqlq(s2.segments), sqlq(s2.gpx),
+        sqlq(s2.toleranceM), sqlq(s2.eleThresholdM),
+        sqlq(t.center.lat), sqlq(t.center.lng), sqlq(t.center.zoom),
+        sqlq(geom),
+      ].join(',') +
+      ');',
+  );
+}
+const sql = lines.join('\n') + '\n';
+writeFileSync(join(ROOT, 'seed-tracks.sql'), sql, 'utf8');
 
 if (failures > 0) {
   console.error(`\n⚠ ${failures} 条轨迹处理失败，请检查上面的报错。`);

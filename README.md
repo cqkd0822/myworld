@@ -124,29 +124,37 @@ node tools/build-tracks.mjs
 
 ---
 
-## 服务端与 D1（Phase 1，2026-10-12 起）
+## 服务端与数据真源（D1，单 Worker `myworld`）
 
-本站开始从「纯静态 + GitHub 当存储」向「Cloudflare 主存储」迁移，**Phase 1 已完成**：
+**数据真源 = Cloudflare D1 `myworld`**，仓库里不再保留明文行程数组
+（`assets/data/flights.js / rail.js / tracks.js` 已删除）。
 
-- **D1 数据库 `myworld`**（APAC）是航班 / 铁路 / 轨迹元数据的主存储镜像，
-  表结构见 `schema.sql`，字段与 `assets/data/*.js` 的数组顺序一一对应。
-- **Worker `myworld-api`** 提供只读接口，返回与现有数据文件**完全同构**的 JSON：
-  `/api/health`、`/api/flights`、`/api/rail`、`/api/rail-voided`、`/api/tracks`。
-  前端切换数据源时视图层零改动（Phase 2 做）。
-- 种子 / 重建：`node tools/seed-d1.mjs` 生成 `seed.sql`，
-  `npx wrangler d1 execute myworld --remote --file=seed.sql` 灌入。
-- 轨迹几何（paths/profile/waypoints）存在 D1 的 `geom_json` 列（migrations/002），
-  按需取：`/api/tracks/:id/geometry`。站点本体（含 GPX 原始文件与生成态
-  tracks.js）**继续以 GitHub 文件为存储**。
-- **R2 暂搁置**：开通 R2 需要在 Dashboard 绑定付款方式（免费额度也要），
-  暂不具备；等开通后再把原始 GPX / 截图等大对象迁过去。
-- Worker 根路径 `/` 是接口索引页。注意：`*.workers.dev` 在部分公司网络
-  被封（与 SSH 出站同一类拦截），本机打不开属网络问题；换热点或以后
-  绑自定义域名即可。正确地址是 **myworld-api**.tw2d9fp8ht.workers.dev。
-- 凭据只放本地 `.env`（已 gitignore，600 权限），**不要提交**。
+- **Worker `myworld` 一个项目承载全部**：静态资源（index.html/assets/gpx/sw.js）
+  走 Workers Static Assets（仓库根目录，`.assetsignore` 排除工具与种子文件），
+  `/api/*` 走 D1 只读接口：`/api/health|flights|rail|rail-voided|tracks|tracks/:id/geometry`。
+  站点与接口**同域**，Service Worker 对 `/api` 用 network-first、静态用 cache-first。
+- 前端启动时异步拉 `/api/*`（4 秒超时），形状与旧明文数组同构，视图层零改动；
+  轨迹几何（paths/profile/waypoints）存 D1 `geom_json` 列，**进详情页才按需拉**，
+  首屏因此去掉约 600 KB 的 tracks.js。
+- 录入/重建数据：
+  - 航班/铁路/未成行：`seed.sql`（历史种子）；
+  - 轨迹：`node tools/build-tracks.mjs` 生成 `seed-tracks.sql`（含 geom_json），
+    再 `npx wrangler d1 execute myworld --remote --file=seed-tracks.sql`；
+    精简 GPX 仍写 `gpx/` 供下载（原始 GPX 在 `tools/source/`，GitHub 当存档）。
+- 本地预览：**双击 index.html 已不支持**（数据在服务端），用一体式本地环境：
 
-> 注意：某些公司网络会封 `*.workers.dev` 与 SSH 出站；本机验证用
-> `wrangler d1 execute --local` + `wrangler dev`（本地 D1 + localhost）完成。
+  ```bash
+  npx wrangler d1 execute myworld --local --persist-to /tmp/wrangler-persist --file=schema.sql   # 首次
+  npx wrangler d1 execute myworld --local --persist-to /tmp/wrangler-persist --file=seed.sql
+  npx wrangler d1 execute myworld --local --persist-to /tmp/wrangler-persist --file=seed-tracks.sql
+  npx wrangler dev --persist-to /tmp/wrangler-persist     # 站点 + API + 本地 D1
+  ```
+
+  （`.wrangler/` 状态目录不要放仓库内，否则 assets 监听会无限 reload。）
+- **R2 暂搁置**：开通需 Dashboard 绑付款方式；大对象继续用 GitHub 文件，开通后再迁。
+- 凭据只放本地 `.env`（gitignore + 600），**不要提交**。
+- 已知网络限制：部分公司网封 `*.workers.dev` 出站（与 SSH 同类拦截），
+  本机打不开属网络问题；手机热点正常，后续绑自定义域名可彻底解决。
 
 ## 离线与缓存
 

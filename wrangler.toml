@@ -1,10 +1,13 @@
-# MyWorld API Worker —— D1 为主存储的读接口（Phase 1）
-# 后续 Phase 会在这里加 R2 bindings、Queues（大 GPX 异步解析）、Workers AI（截图视觉抽取）
-name = "myworld-api"
+# MyWorld —— 单 Worker 承载站点静态资源 + /api 读模型（D1）
+# 站点本体与接口同域：/api/* 走 Worker，其余走 Static Assets（仓库根目录）
+name = "myworld"
 main = "src/worker.js"
 compatibility_date = "2026-09-01"
 
-# database_id 由 `wrangler d1 create myworld` 之后回填
+[assets]
+directory = "."
+binding = "ASSETS"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "myworld"
