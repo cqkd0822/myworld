@@ -118,7 +118,6 @@ INSERT INTO rail VALUES (16,'2025-05-30','Z47','杭州站','武昌站','7车13�
 INSERT INTO rail VALUES (17,'2025-06-01','D3089','武汉站','黄梅东站','5车2D号','改签自6月9日原票');
 INSERT INTO rail VALUES (18,'2025-06-02','K753','武穴站','杭州南站','9车30号上铺','');
 INSERT INTO rail VALUES (19,'2025-07-14','G495','杭州南站','长沙南站','13车04C号','');
-INSERT INTO rail VALUES (20,'2025-08-24','G6539','深圳北站','香港西九龙站','4车13D号','');
 INSERT INTO rail VALUES (21,'2025-10-02','G691','太原南站','武汉站','6车4D号','改签自10月1日');
 INSERT INTO rail VALUES (22,'2025-10-03','D2179','武汉站','黄梅东站','2车16D号','');
 INSERT INTO rail VALUES (23,'2025-10-06','G7438','黄梅东站','杭州东站','5车2C号','');
@@ -176,3 +175,5 @@ INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('C48
 INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('T171','萍乡站','广州白云站','2025-11-14','改签后退票');
 INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('G424','武汉站','郑州东站','2026-09-27','改签为 G980');
 INSERT OR REPLACE INTO meta VALUES ('seeded_at', '2026-10-12T01:58:21.843Z');
+
+INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('G6539','深圳北站','香港西九龙站','2025-08-24','退票（原误记为成行 4车13D号，2026-10 更正）');

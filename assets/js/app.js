@@ -192,6 +192,8 @@
 
     const notes = [f.from.note, f.to.note].filter(Boolean);
     if (f.reg && /存疑/.test(f.reg)) notes.push(`注册号 ${f.reg}`);
+    // 用户给这段行程加的备注（D1 flights.note）
+    if (f.note) notes.push(f.note);
 
     return `<article class="flight">
   <div class="flight__top">
@@ -525,9 +527,9 @@
         )}</div>
       </div>
       <div class="stat">
-        <div class="stat__label">准点率（严格）</div>
+        <div class="stat__label">准点率</div>
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
-        <div class="stat__foot">${overview.onTime} 段准点或提前 / 共 ${overview.flightCount} 段 · 口径 delay≤0</div>
+        <div class="stat__foot">${overview.onTime}/${overview.flightCount} 段 · 口径：到达不晚于计划 +15 分（A15）</div>
       </div>
     </div>
   </section>

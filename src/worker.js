@@ -52,12 +52,12 @@ export default {
 
       if (path === '/api/flights') {
         const { results } = await env.DB.prepare(
-          'SELECT id,date,airline,flight_no,from_raw,to_raw,aircraft,reg,std,sta,ata,cabin,seat,price,delay FROM flights ORDER BY id',
+          'SELECT id,date,airline,flight_no,from_raw,to_raw,aircraft,reg,std,sta,ata,cabin,seat,price,delay,note FROM flights ORDER BY id',
         ).all();
         return json(
           results.map((x) => [
             x.id, x.date, x.airline, x.flight_no, x.from_raw, x.to_raw, x.aircraft, x.reg,
-            x.std, x.sta, x.ata, x.cabin, x.seat, x.price, x.delay,
+            x.std, x.sta, x.ata, x.cabin, x.seat, x.price, x.delay, x.note || '',
           ]),
         );
       }

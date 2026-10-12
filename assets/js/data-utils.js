@@ -219,6 +219,7 @@
         seat,
         price,
         delay,
+        note,
       ] = r;
 
       const date = parseDate(dateRaw);
@@ -256,6 +257,7 @@
         seat,
         price: typeof price === 'number' ? price : null,
         delay: typeof delay === 'number' ? delay : null,
+        note: note || '',
         distanceKm: cityDistanceKm(from.city, to.city),
         blockMin: blockMinutes(std, sta),
       };
@@ -389,7 +391,8 @@
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'));
 
     const withDelay = flights.filter((f) => f.delay != null);
-    const onTime = withDelay.filter((f) => f.delay <= 0).length;
+    // 准点率全站统一 A15 口径：到达不晚于计划 +15 分钟（民航业通用）
+    const onTime = withDelay.filter((f) => f.delay <= 15).length;
 
     const stationCount = new Set();
     rails.forEach((r) => {
