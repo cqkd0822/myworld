@@ -3,7 +3,7 @@
 个人行程记录站：**航班 / 铁路 / 徒步轨迹**三类数据。
 2026-10 起架构升级为：**Cloudflare Worker 单项目承载站点 + API，D1 为数据真源**。
 
-> 当前规模：100 段航班（2015–2026）· 53 段铁路 · 61 条轨迹（徒步/越野）。
+> 当前规模：100 段航班（2015–2026）· 54 段铁路 · 62 条轨迹（徒步/越野）。
 > 站点入口：<https://myworld.tw2d9fp8ht.workers.dev>（站点与 API 同域）
 
 ---
@@ -93,9 +93,12 @@ npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://loca
 
 ## Roadmap
 
+> 2026-10-12：登录与上传入库两册 PRD 落在 [`docs/prd/`](docs/prd/README.md)，含平台免费档硬约束核对、数据模型、接口契约与验收标准。
+
 - [ ] 绑自定义域名（绕开公司网对 workers.dev 的封锁）
 - [ ] 删除另一账号下的旧 Pages 副本
-- [ ] /admin：GPX/截图上传 → 解析/视觉抽取 → 草稿确认 → 写 D1
+- [ ] 多用户登录与权限 —— 方案已写：[docs/prd/auth.md](docs/prd/auth.md)（待评审）
+- [ ] /admin：GPX/截图上传 → 解析/视觉抽取 → 草稿确认 → 写 D1 —— 方案已写：[docs/prd/ingest.md](docs/prd/ingest.md)（待评审）
 - [ ] R2（开通后）：原始 GPX / 截图 / 生成物
 - [ ] nightly cron：D1 快照镜像 commit 回 GitHub（恢复 git diff 审计）
 - [x] 几何只存一份：`track_raw` 为唯一真源，渲染几何在浏览器现算（2026-10）

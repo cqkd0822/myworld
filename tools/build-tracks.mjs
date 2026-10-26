@@ -810,6 +810,21 @@ const MANIFEST = [
     eleThresholdM: 10,
   },
   {
+    // 10-23 K515 杭州南→萍乡（软卧过夜车），10-24 上山两日穿越，10-25 G1422 宜春→杭州东返回。
+    // 源文件为企业微信收件 GPX（GPSBabel 导出）：原文件第 2522 个点 ele=0 是单点 dropout
+    //（邻居 1870/1872），入库前插值修成 1871——否则累计爬升会被虚增约 1900 m、最低海拔显示 0。
+    // 另：源文件是 CRLF 行尾，tools/source/ 里的副本已归一为 LF。
+    id: "2026-10-24-pingxiang-wugongshan-2day",
+    file: "2026-10-24-pingxiang-wugongshan-2day.gpx",
+    name: "武功山两日穿越（萍乡进宜春出）",
+    date: "2026-10-24",
+    region: "江西 · 武功山",
+    kind: "hike",
+    color: "#8b5cf6",
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
     id: "2026-08-15-emeishan",
     file: "峨眉山报国寺道金顶.gpx",
     name: "峨眉山报国寺到金顶",
