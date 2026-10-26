@@ -839,6 +839,192 @@ a {
   flex-wrap: wrap;
 }
 
+/* 多段合一：一次出行里的换乘压在一张卡里，段间用虚线轴串起来。
+   单段卡仍走上面的 .rail，两种卡片的圆角/底色/内边距保持一致。 */
+.rail--trip {
+  display: block;
+  padding: 12px 14px 11px;
+}
+
+.trip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trip__date {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__badge {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--rail);
+  background: var(--rail-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 16px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+
+.trip__summary i {
+  color: var(--brand);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.trip__legs {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.trip__leg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.trip__leg .rail__no {
+  flex: 0 0 52px;
+  width: 52px;
+  padding: 4px 2px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.trip__leg-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip__stops {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 560;
+  color: var(--ink-2);
+  min-width: 0;
+}
+
+.trip__stops span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip__stops i {
+  color: var(--ink-3);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.trip__stops i svg {
+  width: 11px;
+  height: 11px;
+}
+
+.trip__leg-meta {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 时刻列：只有补录过发到时刻的段才出现，缺了就整列不渲染，
+   避免出现一片 "--:--" 把卡片撑成表格 */
+.trip__times {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__times i {
+  width: 12px;
+  height: 1px;
+  background: var(--line);
+  margin: 1px 0;
+}
+
+/* 换乘节点：竖虚线贯穿上下两段，中间一个圆点 */
+.trip__link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 2px 0 2px 62px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.trip__link::before {
+  content: '';
+  position: absolute;
+  left: 25px;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background-image: linear-gradient(to bottom, var(--line) 50%, transparent 50%);
+  background-size: 1px 6px;
+}
+
+.trip__link::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0 0 1.5px var(--ink-3);
+}
+
+.trip__link-wait {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 推定出来的换乘：时刻没录，别让它看起来和精确判定一样确定 */
+.trip__link-wait--na {
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+
+.trip__link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
    轨迹
    -------------------------------------------------------------------------- */

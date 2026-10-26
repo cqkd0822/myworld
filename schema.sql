@@ -27,7 +27,12 @@ CREATE TABLE IF NOT EXISTS rail (
   from_station TEXT NOT NULL,
   to_station   TEXT NOT NULL,
   seat         TEXT,
-  note         TEXT DEFAULT ''
+  note         TEXT DEFAULT '',
+  -- 时刻为**可空**：历史车票大多数只有日期，没有发到时刻。
+  -- 有了才能用「到达 → 出发 ≤ 60 分」判定换乘；缺了就退回同日同城推定，
+  -- 绝不拿近似值填进去。跨零点用 "+1" 后缀，与 flights 的 sta 同一写法。
+  dep_time     TEXT,
+  arr_time     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS rail_voided (

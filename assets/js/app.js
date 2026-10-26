@@ -321,6 +321,68 @@
     return /^</.test(s) ? s : esc(s);
   }
 
+  /** 站名去尾缀「站」，只用于行程摘要那种一字千金的场合 */
+  function shortStation(s) {
+    return esc(String(s || '').replace(/站$/, ''));
+  }
+
+  /**
+   * 多段合一的行程卡。
+   *
+   * 一次出行里可能有 2~3 段车，单段卡一张一张列出来，同一趟旅程会被
+   * 拆成三张卡，看不出「这是从汉口到杭州西的一次行程」。
+   * 这里把段压成竖向时间轴，段间插一行换乘说明。
+   */
+  function tripCard(t) {
+    const badge =
+      t.transfers > 0 ? `${t.legs.length} 段 · 换乘 ${t.transfers} 次` : `${t.legs.length} 段 · 同车`;
+
+    const rows = [];
+    t.legs.forEach((r, i) => {
+      const cls = r.kind.cls || 'rail__no--g';
+      const meta = [r.seat && r.seat !== '—' ? r.seat : '', r.note].filter(Boolean).join(' · ');
+      const times =
+        r.dep || r.arr
+          ? `<div class="trip__times">
+        <span>${r.dep ? r.dep.text : '--:--'}</span>
+        <i></i>
+        <span>${r.arr ? r.arr.text + (r.arr.dayOffset ? '<sup>+1</sup>' : '') : '--:--'}</span>
+      </div>`
+          : '';
+
+      rows.push(`<li class="trip__leg">
+      <div class="rail__no ${cls === 'rail__no--g' ? '' : cls}">${esc(r.train)}</div>
+      <div class="trip__leg-main">
+        <div class="trip__stops"><span>${esc(r.from)}</span><i>${icon.arrow}</i><span>${esc(r.to)}</span></div>
+        ${meta ? `<div class="trip__leg-meta">${esc(meta)}</div>` : ''}
+      </div>
+      ${times}
+    </li>`);
+
+      const link = t.links[i];
+      if (!link) return;
+      const where = link.sameTrain
+        ? '同车续程 · 分段购票'
+        : link.sameStation
+          ? `${esc(r.to)} 同站换乘`
+          : `${esc(r.to)} → ${esc(t.legs[i + 1].from)} 换站`;
+      const wait = link.sameTrain ? '' : link.precise ? `等 ${link.gap} 分` : '时刻未记录';
+      rows.push(`<li class="trip__link">
+      <span class="trip__link-text">${where}</span>
+      ${wait ? `<span class="trip__link-wait${link.precise ? '' : ' trip__link-wait--na'}">${wait}</span>` : ''}
+    </li>`);
+    });
+
+    return `<article class="rail rail--trip">
+  <div class="trip__head">
+    <span class="trip__date">${t.date ? `${t.date.text} ${t.date.weekday}` : t.dateRaw}</span>
+    <span class="trip__badge">${badge}</span>
+  </div>
+  <div class="trip__summary">${shortStation(t.fromStation)}<i>${icon.arrow}</i>${shortStation(t.toStation)}</div>
+  <ol class="trip__legs">${rows.join('')}</ol>
+</article>`;
+  }
+
   function railCard(r) {
     const cls = r.kind.cls || 'rail__no--g';
 
@@ -772,6 +834,12 @@
     const seatKinds = new Map();
     list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
 
+    // 归并发生在**筛选之后**：搜「G3264」只剩一段，卡片自然退化成单段，
+    // 不会因为词条把整次出行都拽出来。
+    const trips = U.buildRailTrips(list);
+    const merged = trips.length < list.length;
+    const countText = merged ? `${list.length} 段 · ${trips.length} 次出行` : `${list.length} 段行程`;
+
     return `<div class="wrap">
   <div class="listhead">
     ${viewToggle('rail', 'list')}
@@ -786,11 +854,20 @@
   </div>
 
   <div class="section__head">
-    <h2 class="section__title" aria-live="polite">${list.length} 段行程</h2>
+    <h2 class="section__title" aria-live="polite">${countText}</h2>
     <span class="section__hint">${[...seatKinds.entries()].map(([k, v]) => `${k} ${v}`).join(' · ')}</span>
   </div>
 
-  ${list.length ? grouped(list, railCard, (r) => r.date) : '<div class="empty">这个筛选条件下没有记录</div>'}
+  ${
+    trips.length
+      ? grouped(
+          trips,
+          (t) => (t.legs.length > 1 ? tripCard(t) : railCard(t.legs[0])),
+          (t) => t.date,
+          merged ? '次出行' : '段',
+        )
+      : '<div class="empty">这个筛选条件下没有记录</div>'
+  }
 
   <div class="fold" id="voided">
     <button class="fold__btn" data-fold>
