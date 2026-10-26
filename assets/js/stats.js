@@ -419,14 +419,10 @@
       ),
     );
 
-    // 换乘次数与列表视图同一个归并口径（buildRailTrips）；
-    // byYear 为空时 Math.max 会得到 -Infinity，这里顺带兜住
-    const transferCount = U.buildRailTrips(list).reduce((s, t) => s + t.transfers, 0);
-
     html.push(
       `<div class="st-inline">
       <div><b>${(km / 10000).toFixed(1)}<i>万</i></b><span>公里<br>铁路里程合计</span></div>
-      <div><b>${list.length}</b><span>段行程<br>换乘 ${transferCount} 次</span></div>
+      <div><b>${list.length}</b><span>段行程<br>${list.filter((r) => r.prefix === 'G').length} 段高铁</span></div>
       <div><b>${byYear.size ? Math.max(...byYear.values()) : 0}</b><span>单年峰值<br>${[...byYear.entries()].sort((a, b) => b[1] - a[1])[0][0]} 年</span></div>
     </div>`,
     );

@@ -226,6 +226,10 @@
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>',
     pin:
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="11" r="2.4"/></svg>',
+    expand:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+    shrink:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
   };
 
   /** kind → [列表标签, tag 样式]。race 是完赛的比赛——全是越野跑，直接标越野跑 */
@@ -535,6 +539,65 @@
     const host = document.getElementById('cityMapHost');
     if (!host) return;
     M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#ffc247' });
+    addMapExpandBtn(host);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 地图横屏展开                                                        */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * 三类地图宿主（首页城市图 / 航迹图·线路图 / 足迹详情）共用的展开按钮。
+   *
+   * 不用 CSS rotate 硬转：转了之后腾讯 GL 的触摸坐标不会跟着映射，拖拽会乱。
+   * 路线是——能全屏就全屏，全屏后尝试锁横屏（Android Chrome 支持，需要
+   * fullscreen 前提）；iOS 没有这套 API，退化为全视口覆盖层，提示用户
+   * 自己旋转手机。
+   */
+  function addMapExpandBtn(host) {
+    if (!host || host.querySelector('.map-expand')) return;
+    const btn = document.createElement('button');
+    btn.className = 'map-expand';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', '横屏展开地图');
+    btn.innerHTML = icon.expand;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMapExpand(host, btn);
+    });
+    host.appendChild(btn);
+  }
+
+  function toggleMapExpand(host, btn) {
+    const on = host.classList.toggle('is-expanded');
+    document.body.classList.toggle('map-expanded', on);
+    btn.innerHTML = on ? icon.shrink : icon.expand;
+    btn.setAttribute('aria-label', on ? '收起地图' : '横屏展开地图');
+
+    if (on) {
+      const df = document.documentElement;
+      const req = df.requestFullscreen || df.webkitRequestFullscreen;
+      if (req) {
+        Promise.resolve()
+          .then(() => req.call(df))
+          .then(() => {
+            const lock = screen.orientation && screen.orientation.lock;
+            return lock ? lock.call(screen.orientation, 'landscape') : null;
+          })
+          .catch(() => {
+            /* iOS / 桌面不支持：is-expanded 覆盖层已经够用 */
+          });
+      }
+    } else {
+      if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    // 容器尺寸变了，捅一下 resize 让 GL 重算画布；transition 结束后再补一刀
+    window.dispatchEvent(new Event('resize'));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 350);
   }
 
   function mountRouteMap(kind) {
@@ -564,11 +627,46 @@
           : { items: list, stats: railStats(list) };
       },
     });
+    addMapExpandBtn(host);
   }
 
   /* ------------------------------------------------------------------ */
   /* 视图：概览                                                          */
   /* ------------------------------------------------------------------ */
+
+  /**
+   * 游历城市明细底部弹层。首屏 chips 是按次数排的全部城市，但翻起来
+   * 没有结构；这里给一张按源分解的清单，想核对某个城市坐过几趟时用。
+   */
+  function citiesSheetHtml(citiesAll) {
+    const rows = citiesAll
+      .map(
+        ([city, total, o]) => `<div class="cityrow">
+      <b>${esc(city)}</b>
+      <span class="cityrow__n">${total} 次</span>
+      <span class="cityrow__src">
+        ${o.flight ? `<i class="src src--flight">飞 ${o.flight}</i>` : ''}
+        ${o.rail ? `<i class="src src--rail">铁 ${o.rail}</i>` : ''}
+        ${o.track ? `<i class="src src--track">徒 ${o.track}</i>` : ''}
+        ${!o.flight && !o.rail && !o.track ? '<i class="src">—</i>' : ''}
+      </span>
+    </div>`,
+      )
+      .join('');
+
+    return `<div class="sheet" id="citiesSheet" hidden>
+  <div class="sheet__mask" data-sheetclose></div>
+  <div class="sheet__panel" role="dialog" aria-label="游历城市明细">
+    <div class="sheet__grab" aria-hidden="true"></div>
+    <div class="sheet__head">
+      <b>游历城市 · 明细</b>
+      <span>${citiesAll.length} 座 · 飞行 + 铁路 + 徒步</span>
+      <button class="sheet__close" type="button" data-sheetclose aria-label="关闭">完成</button>
+    </div>
+    <div class="sheet__body">${rows}</div>
+  </div>
+</div>`;
+  }
 
   function viewHome() {
     // 跨度取三源（航班/铁路/轨迹）并集（firstDate/lastDate 已在 computeOverview
@@ -598,7 +696,7 @@
         const h = (v) => `${Math.round((v / maxTotal) * 100)}%`;
         return `<div class="bars__col" title="${y} 年：航班 ${f} 段，铁路 ${r} 段">
   <span class="bars__n">${total || ''}</span>
-  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:0;height:100%">
+  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:0;height:100%">
     <div class="bars__bar bars__bar--rail" style="${r ? `height:${h(r)}` : 'display:none'}"></div>
     <div class="bars__bar" style="${f ? `height:${h(f)}` : 'display:none'}"></div>
   </div>
@@ -679,7 +777,8 @@
   <section class="section">
     <div class="section__head">
       <h2 class="section__title">游历城市</h2>
-      <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数</span>
+      <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数
+        <button class="hintbtn" type="button" data-citiesdetail>查看明细</button></span>
     </div>
     <div class="chips">
       ${overview.citiesAll
@@ -694,6 +793,7 @@
         .join('')}
     </div>
     <div class="citymap" id="cityMapHost"></div>
+    ${citiesSheetHtml(overview.citiesAll)}
   </section>
 
   <section class="section">
@@ -1100,6 +1200,7 @@
     const host = document.getElementById('mapHost');
     if (!t || !host) return;
     mapRef = M.map.renderTrack(t, host);
+    addMapExpandBtn(host);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1199,6 +1300,9 @@
     }
     // routemap 是懒加载模块：没进过地图页时它还不存在（直接开 #/rail/list 就会命中）
     if (M.routemap) M.routemap.destroy();
+    // 展开态的地图宿主随 innerHTML 一起销毁，body 上的锁滚动标志要手动清，
+    // 否则换页后整页滚不动
+    document.body.classList.remove('map-expanded');
 
     let html;
     if (route.detail) html = viewTrackDetail(route.trackId);
@@ -1384,6 +1488,28 @@
     const fold = e.target.closest('[data-fold]');
     if (fold) {
       fold.closest('.fold').classList.toggle('is-open');
+      return;
+    }
+
+    // 游历城市明细弹层：打开/关闭。遮罩和「完成」共用 data-sheetclose
+    const citiesBtn = e.target.closest('[data-citiesdetail]');
+    if (citiesBtn) {
+      const sheet = document.getElementById('citiesSheet');
+      if (sheet) {
+        sheet.hidden = false;
+        requestAnimationFrame(() => sheet.classList.add('is-open'));
+      }
+      return;
+    }
+    const sheetClose = e.target.closest('[data-sheetclose]');
+    if (sheetClose) {
+      const sheet = sheetClose.closest('.sheet');
+      if (sheet) {
+        sheet.classList.remove('is-open');
+        setTimeout(() => {
+          sheet.hidden = true;
+        }, 220);
+      }
       return;
     }
 

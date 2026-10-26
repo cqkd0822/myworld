@@ -359,11 +359,10 @@
    *
    * 三种情形：
    *   1. 同车次、且前段到达站 == 后段出发站 → 分段购票，不是换乘；
-   *   2. 两端都有时刻 → 严格按 0~60 分钟判定（跨零点由绝对分钟自然处理）；
-   *   3. 缺时刻 → 只能按「同日 + 同城」推定，UI 必须标出来是推定。
-   *
-   * (3) 不做跨日推定：没有时刻就分不清「夜里换乘」和「第二天再走」，
-   * 宁可拆成两张卡。
+   *   2. 两端都有时刻 → 严格按 0~60 分钟判定（跨零点由绝对分钟自然处理），
+   *      同城异站也认——有时刻就是事实；
+   *   3. 缺时刻 → 只推定「同日 + 同城 + 同站」；异站不推定，因为分不清
+   *      「赶去另一个站」和「在那座城玩到晚上」（T172/D583 就是后者）。
    */
   function railLink(a, b) {
     if (!a || !b || a === b) return null;
@@ -382,6 +381,8 @@
       return { gap, sameStation, sameTrain, precise: true };
     }
 
+    // 缺时刻：只有同站接续才推定（同车次必然同站，已在 sameTrain 里）
+    if (!sameStation) return null;
     const da = dayOrdinal(a.date);
     const db = dayOrdinal(b.date);
     if (da == null || db == null || da !== db) return null;

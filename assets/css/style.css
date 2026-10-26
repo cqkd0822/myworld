@@ -2489,3 +2489,216 @@ a {
   color: var(--ink-3);
   letter-spacing: 0.02em;
 }
+
+/* ==========================================================================
+   2026-10-26 晚 · 地图横屏展开 + 游历城市明细弹层
+   ========================================================================== */
+
+/* ---- 地图展开按钮：三类宿主通用，浮在 GL 控件之上 ---- */
+.map-expand {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1200; /* 宿主已 isolation:isolate，压过 GL 自带的几百级控件即可 */
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(12, 18, 32, 0.82);
+  color: #cdd6e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.map-expand:active {
+  transform: scale(0.94);
+}
+
+/* 展开态：全视口覆盖。不用 CSS rotate 硬转——转了之后 GL 的触摸坐标
+   不会跟着映射，拖拽方向会反。横屏体验靠 fullscreen + orientation.lock
+   （Android），iOS 退化成覆盖层 + 「横握手机」提示。 */
+.citymap.is-expanded,
+.tmap.is-expanded,
+.detail__map.is-expanded {
+  position: fixed;
+  inset: 0;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  border: 0;
+  border-radius: 0;
+  z-index: 2000; /* topbar/tabbar 是 50/60 */
+}
+
+body.map-expanded {
+  overflow: hidden;
+}
+
+/* 竖屏时的轻提示；进横屏后自动消失 */
+.citymap.is-expanded::after,
+.tmap.is-expanded::after,
+.detail__map.is-expanded::after {
+  content: '横握手机查看更佳';
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 1201;
+  background: rgba(12, 18, 32, 0.85);
+  color: #9aa5bd;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+@media (orientation: landscape) {
+  .citymap.is-expanded::after,
+  .tmap.is-expanded::after,
+  .detail__map.is-expanded::after {
+    display: none;
+  }
+}
+
+/* ---- 游历城市明细：底部弹层 ---- */
+.hintbtn {
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+}
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+}
+.sheet[hidden] {
+  display: none;
+}
+.sheet__mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 8, 16, 0.6);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.sheet.is-open .sheet__mask {
+  opacity: 1;
+}
+.sheet__panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border-radius: 16px 16px 0 0;
+  box-shadow: var(--shadow);
+  transform: translateY(100%);
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sheet.is-open .sheet__panel {
+  transform: none;
+}
+.sheet__grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+.sheet__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+.sheet__head b {
+  font-size: 14px;
+}
+.sheet__head span {
+  flex: 1;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.sheet__close {
+  border: 0;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.sheet__body {
+  overflow-y: auto;
+  padding: 2px 16px calc(14px + env(safe-area-inset-bottom));
+}
+.cityrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13.5px;
+}
+.cityrow:last-child {
+  border-bottom: 0;
+}
+.cityrow b {
+  width: 68px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.cityrow__n {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.cityrow__src {
+  margin-left: auto;
+  display: flex;
+  gap: 5px;
+}
+.src {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  background: var(--line-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.src--flight {
+  color: var(--brand-deep);
+}
+.src--rail {
+  color: var(--rail);
+}
+.src--track {
+  color: var(--amber);
+}
+
+@media (min-width: 700px) {
+  .sheet__panel {
+    left: 50%;
+    right: auto;
+    width: 480px;
+    transform: translate(-50%, 100%);
+  }
+  .sheet.is-open .sheet__panel {
+    transform: translate(-50%, 0);
+  }
+}
