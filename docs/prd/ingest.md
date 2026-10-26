@@ -124,7 +124,7 @@
 `id` 生成：`<date>-<slug>`（slug 由 name 转拼音/英文，用户可改），冲突时追加 `-2`。`id` 是 `tracks` 主键也是 `track_raw` 外键，必须稳定且唯一。
 
 **「下载精简 GPX」按钮要改造**：现在 `app.js:938` 直接 `<a href="${s.gpx}">` 指向仓库里的静态文件 `gpx/<id>.gpx`，新上传的轨迹没有这个文件。方案：
-1. 首选 —— 浏览器**从 `track_raw` 现算**：详情页本来就为了画地图拉过 raw，`M.geo.writeGpx(name, simplifySegments(...))` 直接生成 Blob 下载，**零存储、零边缘 CPU**；
+1. ✅ **已实施（2026-10-26）**：浏览器**从 `track_raw` 现算重建原始精度 GPX**（`unpackParts(parts,{needTime:true})` → `writeGpx` → Blob），与入库几何逐点一致、统计零失真（Node 端到端对拍：8740/14162 点全保留，距离/爬升/移动时长逐位相同）；主按钮「下载 GPX（原始精度）」，精简版降为备选按钮；**零存储、零边缘 CPU**。起因：用户反馈抽稀 GPX 失真（武功山实测距离 −1.9%、爬升 −2.2%、移动时长口径漂移）；
 2. 若开了 R2 —— 上传时把精简 GPX 一并 PUT 到 R2，`gpx_key` 存 R2 key，下载走 Worker 302 到预签名 URL；
 3. 仓库里的 `gpx/` 61 个文件保留不动（老链接不断），`tools/build-tracks.mjs` 继续服务「批量重建/改口径」的场景。
 

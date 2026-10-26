@@ -105,6 +105,7 @@
       const res = await fetch(`/api/tracks/${encodeURIComponent(t.id)}/raw`);
       if (!res.ok) return false;
       const g = await res.json();
+      t._rawParts = g.parts; // 留给付下载：原始点编码是无损的，下载时按原精度重建
       const segments = await M.raw.unpackParts(g.parts);
       const tol = g.toleranceM || 5;
       t.paths = M.geo.toMapPaths(M.geo.simplifySegments(segments, tol), 5);
@@ -935,7 +936,10 @@
   }
 
   <div style="display:flex;gap:10px;margin-top:14px">
-    <a class="btn" href="${esc(s.gpx)}" download>${icon.download} 下载精简 GPX</a>
+    <button class="btn" type="button" data-dlgpx="${esc(t.id)}">
+      ${icon.download} 下载 GPX（原始精度 · ${U.formatNumber(s.rawPoints)} 点）
+    </button>
+    <a class="btn btn--ghost" href="${esc(s.gpx)}" download>精简版</a>
     <a class="btn btn--ghost" href="#/tracks">返回列表</a>
   </div>
 
@@ -943,8 +947,9 @@
     原始 ${U.formatNumber(s.rawPoints)} 个点（${U.formatNumber(
       Math.round(s.sourceBytes / 1024),
     )} KB）已抽稀到 ${U.formatNumber(s.shownPoints)} 个点（容差 ${s.toleranceM} 米），
-    肉眼看不出差别。下载的 GPX 就是这个抽稀结果。
-    爬升按 ${s.eleThresholdM} 米阈值过滤高度抖动后累加。
+    **仅用于地图渲染**，肉眼看不出差别；下载的 GPX 由 track_raw 在浏览器现算重建，
+    与入库几何逐点一致（含时间戳）。
+    爬升按 ${s.eleThresholdM} 米阈值过滤高度抖动后累加，统计基于原始点。
   </p>
 </div>`;
   }
@@ -1132,6 +1137,38 @@
     return { name: `myworld-${stamp}.csv`, mime: 'text/csv', text: '\uFEFF' + text };
   }
 
+  /**
+   * 下载 GPX = **原始精度**：浏览器从 track_raw 现算重建（含时间戳）。
+   *
+   * 为什么不再默认发精简版：gpx/ 里的精简 GPX 是静态站时代的体积妥协
+   * （2.1 MB → 104 KB），而 Douglas-Peucker 只保证「原始点距抽稀折线 ≤ 容差」，
+   * 不保发夹弯顶点与海拔起伏——2026-10 武功山那条实测距离 −1.9%、累计爬升
+   * −2.2%、移动时长因点间隔变化而口径失真。track_raw 本身无损（1e-6 度 /
+   * 0.1 m / 1 s），这里重建出的几何与入库逐点一致，不需要在库里存第二份。
+   * 抽稀此后只承担两个职责：地图渲染 LOD、以及体积敏感时的备选下载。
+   */
+  async function downloadTrackGpx(t) {
+    if (!t._rawParts) {
+      const res = await fetch(`/api/tracks/${encodeURIComponent(t.id)}/raw`);
+      if (!res.ok) throw new Error(`raw ${res.status}`);
+      t._rawParts = (await res.json()).parts;
+    }
+    // needTime=true：导出要带时间戳；地图渲染那条路不需要时间，
+    // 保持无时间解码以省掉上万次 Date 构造
+    const segments = await M.raw.unpackParts(t._rawParts, { needTime: true });
+    const blob = new Blob([M.geo.writeGpx(t.name, segments)], {
+      type: 'application/gpx+xml;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${t.id}.gpx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   function downloadExport(kind) {
     const { name, mime, text } = exportText(kind);
     const blob = new Blob([text], { type: `${mime};charset=utf-8` });
@@ -1176,6 +1213,22 @@
     const exp = e.target.closest('[data-export]');
     if (exp) {
       downloadExport(exp.dataset.export);
+      return;
+    }
+
+    const dlg = e.target.closest('[data-dlgpx]');
+    if (dlg) {
+      const t = tracks.find((x) => x.id === dlg.dataset.dlgpx);
+      if (!t) return;
+      dlg.disabled = true;
+      downloadTrackGpx(t)
+        .catch(() => {
+          // 断网 / raw 拉不到时退回精简版，至少有个文件
+          if (t.stats && t.stats.gpx) location.href = t.stats.gpx;
+        })
+        .finally(() => {
+          dlg.disabled = false;
+        });
       return;
     }
 
