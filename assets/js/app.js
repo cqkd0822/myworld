@@ -1,9 +1,8 @@
 /**
  * 应用主逻辑 —— 路由 + 四个视图的渲染。
  *
- * 没有框架，也不需要：数据是静态的（100 段航班 + 54 段铁路 + 63 条轨迹，
- * 全量序列化后约 410 KB），页面用模板字符串拼出来就行。
- * 这样整个站零依赖、零构建，鼠标双击 index.html 就能看。
+ * 没有框架，也不需要：数据从 /api/* 拉原始行（D1 为真源），视图用模板
+ * 字符串拼出来，所有统计都在浏览器现算。
  *
  * 路由用 hash（#/flights 这种）。选 hash 而不是 history API，是因为
  * GitHub Pages 这类静态托管没有服务端重写，history 路由一刷新就 404。
@@ -26,8 +25,8 @@
         '<b style="color:#e5484d">页面没能启动</b>' +
         '<div style="margin-top:8px;font-size:13px">行程数据脚本没有加载完成。</div>' +
         '<div style="margin-top:10px;font-size:12px;color:#98a2b3">' +
-        '请确认 assets/data/ 下的 5 个文件与 assets/js/data-utils.js 都在，' +
-        '并且 <script> 标签的顺序没被打乱（顺序即依赖顺序）。' +
+        '数据真源是 D1（/api/*），请通过 <code>npx wrangler dev</code> 或' +
+        '<code>node _preview/serve.mjs</code> 访问，不要直接双击 index.html。' +
         '</div></div>';
     }
     return;
@@ -510,11 +509,15 @@
   /* ------------------------------------------------------------------ */
 
   function viewHome() {
+    // 跨度取三源（航班/铁路/轨迹）并集（firstDate/lastDate 已在 computeOverview
+    // 里改为三源）；年份段也从跨度推导，不再用 overview.years（那是航班+铁路
+    // 的并集，轨迹年份超出时会跟前面的日期自相矛盾）。
     const spanText =
       overview.firstDate && overview.lastDate
-        ? `${overview.firstDate} → ${overview.lastDate} · ${overview.years[0]}–${
-            overview.years[overview.years.length - 1]
-          } 年`
+        ? `${overview.firstDate} → ${overview.lastDate} · ${overview.firstDate.slice(
+            0,
+            4,
+          )}–${overview.lastDate.slice(0, 4)} 年`
         : '';
 
     // 逐年柱状图：一段一年，蓝色是航班、青色是铁路，堆叠成出行总量
@@ -606,7 +609,7 @@
       <div class="stat">
         <div class="stat__label">准点率</div>
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
-        <div class="stat__foot">${overview.onTime}/${overview.flightCount} 段 · 口径：到达不晚于计划 +15 分（A15）</div>
+        <div class="stat__foot">${overview.onTime}/${overview.delayKnown} 段 · 口径：到达不晚于计划 +15 分（A15）</div>
       </div>
     </div>
   </section>

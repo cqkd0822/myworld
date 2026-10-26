@@ -382,8 +382,15 @@
 
     const topSegs = [...segs.entries()].sort((a, b) => b[1] - a[1]);
     const topTrains = [...trains.entries()].sort((a, b) => b[1] - a[1]).filter(([, n]) => n > 1);
-    const KIND_ORDER = ['高铁', '动车', '城际', '普速', '直达', '特快'];
-    const kindRows = KIND_ORDER.filter((k) => kinds.has(k)).map((k) => ({ name: k, count: kinds.get(k) }));
+    // 车型排序按 TRAIN_KINDS 的语义顺序走；数据里出现表外标签（新车型）时
+    // 追加在末尾而不是丢弃——之前这里用白名单过滤，漏一个标签那几段车
+    // 就从图里整个消失（4 段 K 车就是这么没的）。
+    const KIND_ORDER = ['高铁', '动车', '城际', '市郊', '直达', '特快', '快速', '临客', '旅游', '普速'];
+    const kindRows = [
+      ...KIND_ORDER.filter((k) => kinds.has(k)),
+      ...[...kinds.keys()].filter((k) => !KIND_ORDER.includes(k)).sort(),
+    ].map((k) => ({ name: k, count: kinds.get(k) }));
+    const topKind = kindRows[0];
 
     const html = [];
 
@@ -434,7 +441,13 @@
       );
     }
 
-    html.push(section('车型构成', '高铁为主', shareBars(kindRows)));
+    html.push(
+      section(
+        '车型构成',
+        topKind ? `${topKind.name}为主 · ${topKind.count}/${list.length} 段` : '',
+        shareBars(kindRows),
+      ),
+    );
     // 「未记录」垫底：它不是一种坐席，排在前面只会占住最显眼的位置
     const seatRows = [...seats.entries()]
       .map(([name, count]) => ({ name, count }))

@@ -283,9 +283,12 @@
     G: { label: '高铁', cls: 'rail__no--g' },
     D: { label: '动车', cls: 'rail__no--d' },
     C: { label: '城际', cls: 'rail__no--c' },
+    S: { label: '市郊', cls: 'rail__no--ktz' },
     Z: { label: '直达', cls: 'rail__no--ktz' },
     T: { label: '特快', cls: 'rail__no--ktz' },
     K: { label: '快速', cls: 'rail__no--ktz' },
+    L: { label: '临客', cls: 'rail__no--ktz' },
+    Y: { label: '旅游', cls: 'rail__no--ktz' },
   };
 
   /** 座位串是混合语义，这里只做粗分类，用于统计和图标 */
@@ -344,12 +347,23 @@
   /* 汇总统计                                                            */
   /* ------------------------------------------------------------------ */
 
-  /** 轨迹 → 城市：先按名字最长前缀匹配城市词典，再退回 region 的「省 · 市」。 */
+  /**
+   * 轨迹 → 城市：先按名字最长前缀匹配城市词典，再退回 region 的「省 · 市」。
+   *
+   * 有些轨迹名字和 region 都不是城市名（徽杭古道跨绩溪→杭州、武功山是景区名），
+   * 这里单独指认；绩溪属宣城，武功山这段是萍乡进宜春出，记常规起点萍乡。
+   */
+  const TRACK_CITY_ALIAS = {
+    徽杭古道: '宣城',
+    武功山: '萍乡',
+  };
+
   function trackCity(t) {
     const parts = String(t.region || '').split('·').map((x) => x.trim());
     for (const src of [t.name, parts[1], parts[0]]) {
       const v = String(src || '');
       for (const key of CITY_KEYS) if (v.startsWith(key)) return key;
+      for (const key of Object.keys(TRACK_CITY_ALIAS)) if (v.includes(key)) return TRACK_CITY_ALIAS[key];
     }
     return null;
   }
@@ -393,7 +407,6 @@
     const withDelay = flights.filter((f) => f.delay != null);
     // 准点率全站统一 A15 口径：到达不晚于计划 +15 分钟（民航业通用）
     const onTime = withDelay.filter((f) => f.delay <= 15).length;
-
     const stationCount = new Set();
     rails.forEach((r) => {
       stationCount.add(r.from);
@@ -427,14 +440,28 @@
       onTime,
       delayed: withDelay.length - onTime,
       onTimeRate: withDelay.length ? onTime / withDelay.length : 0,
+      delayKnown: withDelay.length,
       stationCount: stationCount.size,
       maxDelay: flights.reduce((m, f) => Math.max(m, f.delay || 0), 0),
       longest: flights
         .filter((f) => f.distanceKm)
         .sort((a, b) => b.distanceKm - a.distanceKm)[0],
       pricey: fareList.sort((a, b) => b.price - a.price)[0],
-      firstDate: flights.length ? flights[flights.length - 1].dateRaw : null,
-      lastDate: flights.length ? flights[0].dateRaw : null,
+      firstDate: [
+        ...flights.map((f) => f.dateRaw),
+        ...rails.map((r) => r.dateRaw),
+        ...tracks.map((t) => t.date),
+      ]
+        .filter(Boolean)
+        .sort()[0] || null,
+      lastDate: [
+        ...flights.map((f) => f.dateRaw),
+        ...rails.map((r) => r.dateRaw),
+        ...tracks.map((t) => t.date),
+      ]
+        .filter(Boolean)
+        .sort()
+        .pop() || null,
       flightsByYear,
       railsByYear,
       years,
