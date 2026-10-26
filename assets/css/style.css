@@ -2563,7 +2563,7 @@ body.map-expanded {
   }
 }
 
-/* ---- 游历城市明细：底部弹层 ---- */
+/* ---- 游历城市明细（独立页 #/cities）：入口按钮 + 统计条 + 清单 ---- */
 .hintbtn {
   border: 0;
   background: none;
@@ -2572,80 +2572,43 @@ body.map-expanded {
   font-family: inherit;
   padding: 0 0 0 6px;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 2200;
-}
-.sheet[hidden] {
-  display: none;
-}
-.sheet__mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(4, 8, 16, 0.6);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.sheet.is-open .sheet__mask {
-  opacity: 1;
-}
-.sheet__panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 76vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--card);
-  border-radius: 16px 16px 0 0;
+/* 四格统计条：城市数 + 三源到访次数 */
+.citysum {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line-soft);
+  border-radius: var(--r-lg);
+  overflow: hidden;
   box-shadow: var(--shadow);
-  transform: translateY(100%);
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  margin-bottom: 14px;
 }
-.sheet.is-open .sheet__panel {
-  transform: none;
+.citysum > div {
+  background: var(--card);
+  padding: 11px 8px 10px;
+  text-align: center;
 }
-.sheet__grab {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line);
-  margin: 8px auto 0;
-  flex-shrink: 0;
+.citysum b {
+  display: block;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
-.sheet__head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 10px 16px 8px;
-  border-bottom: 1px solid var(--line-soft);
-  flex-shrink: 0;
-}
-.sheet__head b {
-  font-size: 14px;
-}
-.sheet__head span {
-  flex: 1;
-  font-size: 11px;
+.citysum span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
   color: var(--ink-3);
 }
-.sheet__close {
-  border: 0;
-  background: var(--brand-soft);
-  color: var(--brand-deep);
-  font-size: 12px;
-  border-radius: 999px;
-  padding: 4px 12px;
-  cursor: pointer;
+
+.citylist {
+  padding: 2px 14px;
 }
-.sheet__body {
-  overflow-y: auto;
-  padding: 2px 16px calc(14px + env(safe-area-inset-bottom));
-}
+
 .cityrow {
   display: flex;
   align-items: center;
@@ -2657,8 +2620,17 @@ body.map-expanded {
 .cityrow:last-child {
   border-bottom: 0;
 }
+/* 名次按全量算，搜索后仍显示总榜位置 */
+.cityrow__rank {
+  width: 20px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .cityrow b {
-  width: 68px;
+  width: 66px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -2691,14 +2663,13 @@ body.map-expanded {
   color: var(--amber);
 }
 
-@media (min-width: 700px) {
-  .sheet__panel {
-    left: 50%;
-    right: auto;
-    width: 480px;
-    transform: translate(-50%, 100%);
-  }
-  .sheet.is-open .sheet__panel {
-    transform: translate(-50%, 0);
-  }
+.citynote {
+  margin: 12px 4px 4px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.citynote strong {
+  color: var(--ink-2);
+  font-weight: 600;
 }

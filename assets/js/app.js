@@ -200,6 +200,7 @@
     railQuery: '',
     trackQuery: '',
     trackKind: 'all',
+    cityQuery: '',
     // 「统计 | 列表 | 航迹图」三种视图。默认停在统计——打开一个 tab
     // 先看到成果，再往下翻明细。切到别的 tab 再回来，状态不会被打回原形。
     flightView: 'stats',
@@ -634,38 +635,64 @@
   /* 视图：概览                                                          */
   /* ------------------------------------------------------------------ */
 
+  /* ------------------------------------------------------------------ */
+  /* 视图：游历城市明细（#/cities）                                       */
+  /* ------------------------------------------------------------------ */
+
   /**
-   * 游历城市明细底部弹层。首屏 chips 是按次数排的全部城市，但翻起来
-   * 没有结构；这里给一张按源分解的清单，想核对某个城市坐过几趟时用。
+   * 独立的二级页，不再是底部弹层：chips 只能横向翻一小段，长尾城市
+   * （到访 1–2 次的）根本翻不到；明细要能搜、能一行行核对。
+   * 顶栏的返回按钮由路由控制，直接分享 #/cities 也能打开。
    */
-  function citiesSheetHtml(citiesAll) {
-    const rows = citiesAll
+  function viewCities() {
+    const all = overview.citiesAll;
+    const q = state.cityQuery.trim().toLowerCase();
+    const rows = q ? all.filter(([c]) => String(c).toLowerCase().includes(q)) : all;
+    // 排名按全量算：搜索后剩下的行仍显示它在总榜的名次，不会变成 1、2、3
+    const rank = new Map(all.map(([c], i) => [c, i + 1]));
+    const sum = all.reduce(
+      (a, [, , o]) => ({
+        f: a.f + (o.flight || 0),
+        r: a.r + (o.rail || 0),
+        t: a.t + (o.track || 0),
+      }),
+      { f: 0, r: 0, t: 0 },
+    );
+
+    const list = rows
       .map(
         ([city, total, o]) => `<div class="cityrow">
+      <span class="cityrow__rank">${rank.get(city)}</span>
       <b>${esc(city)}</b>
       <span class="cityrow__n">${total} 次</span>
       <span class="cityrow__src">
         ${o.flight ? `<i class="src src--flight">飞 ${o.flight}</i>` : ''}
         ${o.rail ? `<i class="src src--rail">铁 ${o.rail}</i>` : ''}
         ${o.track ? `<i class="src src--track">徒 ${o.track}</i>` : ''}
-        ${!o.flight && !o.rail && !o.track ? '<i class="src">—</i>' : ''}
       </span>
     </div>`,
       )
       .join('');
 
-    return `<div class="sheet" id="citiesSheet" hidden>
-  <div class="sheet__mask" data-sheetclose></div>
-  <div class="sheet__panel" role="dialog" aria-label="游历城市明细">
-    <div class="sheet__grab" aria-hidden="true"></div>
-    <div class="sheet__head">
-      <b>游历城市 · 明细</b>
-      <span>${citiesAll.length} 座 · 飞行 + 铁路 + 徒步</span>
-      <button class="sheet__close" type="button" data-sheetclose aria-label="关闭">完成</button>
-    </div>
-    <div class="sheet__body">${rows}</div>
+    return `<div class="controls">
+    <div class="searchrow"><input class="search" type="search" id="q-city" data-q="cityQuery" aria-label="搜索城市" placeholder="搜城市名" value="${esc(state.cityQuery)}"></div>
   </div>
-</div>`;
+
+  <div class="citysum">
+    <div><b>${all.length}</b><span>座城市</span></div>
+    <div><b>${sum.f}</b><span>飞行到访</span></div>
+    <div><b>${sum.r}</b><span>铁路到访</span></div>
+    <div><b>${sum.t}</b><span>足迹到访</span></div>
+  </div>
+
+  <div class="section__head">
+    <h2 class="section__title">${q ? `${rows.length} 个匹配` : '按到访次数'}</h2>
+    <span class="section__hint">${q ? `共 ${all.length} 座` : '同一城市多次只占一行'}</span>
+  </div>
+
+  <div class="card citylist">${list || '<div class="empty">没有匹配的城市</div>'}</div>
+
+  <p class="citynote">飞行、铁路按<strong>每段的到达城市</strong>计（换乘经停也算一次到访）；足迹按轨迹所在城市计。三源合并后按次数降序。</p>`;
   }
 
   function viewHome() {
@@ -778,7 +805,7 @@
     <div class="section__head">
       <h2 class="section__title">游历城市</h2>
       <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数
-        <button class="hintbtn" type="button" data-citiesdetail>查看明细</button></span>
+        <a class="hintbtn" href="#/cities">查看明细</a></span>
     </div>
     <div class="chips">
       ${overview.citiesAll
@@ -793,7 +820,6 @@
         .join('')}
     </div>
     <div class="citymap" id="cityMapHost"></div>
-    ${citiesSheetHtml(overview.citiesAll)}
   </section>
 
   <section class="section">
@@ -1219,6 +1245,10 @@
     const m = hash.match(/^#\/track\/(.+)$/);
     if (m) return { tab: 'tracks', trackId: decodeURIComponent(m[1]), detail: true };
 
+    // 游历城市明细：概览的下钻页。tab 仍算 home（底栏高亮不变），
+    // 但顶栏要显示返回、且不挂首页那张地图。
+    if (/^#\/cities\/?$/.test(hash)) return { tab: 'home', sub: 'cities' };
+
     // #/flights/map 这种深链：既是可收藏的入口，也让自动化截图能直达航迹图
     const mapView = /\/map$/.test(hash);
     const statsView = /\/stats$/.test(hash);
@@ -1275,17 +1305,19 @@
     // F8：统计/地图模块没到位时先占位，注入完再渲染（同几何的占位模式）
     if (!route.detail) {
       const need =
-        route.tab === 'home'
-          ? 'routemap'
-          : (route.tab === 'flights'
-              ? state.flightView
-              : route.tab === 'rail'
-                ? state.railView
-                : state.trackView) === 'stats'
-            ? 'stats'
-            : (route.tab === 'flights' ? state.flightView : route.tab === 'rail' ? state.railView : state.trackView) === 'map'
-              ? 'routemap'
-              : null;
+        route.sub
+          ? null
+          : route.tab === 'home'
+            ? 'routemap'
+            : (route.tab === 'flights'
+                ? state.flightView
+                : route.tab === 'rail'
+                  ? state.railView
+                  : state.trackView) === 'stats'
+              ? 'stats'
+              : (route.tab === 'flights' ? state.flightView : route.tab === 'rail' ? state.railView : state.trackView) === 'map'
+                ? 'routemap'
+                : null;
       if (need && !(window.MYWORLD && window.MYWORLD[need])) {
         view.innerHTML = '<div class="boot">正在加载模块…</div>';
         ensureMod(need).then(() => render('keep'));
@@ -1306,6 +1338,7 @@
 
     let html;
     if (route.detail) html = viewTrackDetail(route.trackId);
+    else if (route.sub === 'cities') html = viewCities();
     else if (route.tab === 'flights') html = viewFlights();
     else if (route.tab === 'rail') html = viewRail();
     else if (route.tab === 'tracks') html = viewTracks();
@@ -1313,9 +1346,12 @@
 
     // 补一个屏幕阅读器用的 h1：顶栏标题是 <p>（否则一页两个 h1），
     // 视图内部直接从 h2 起步，层级才不断档
-    const pageTitle = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
-      route.tab
-    ];
+    const pageTitle =
+      route.sub === 'cities'
+        ? '游历城市'
+        : { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
+            route.tab
+          ];
     view.innerHTML = `<h1 class="sr-only">${esc(pageTitle)}</h1>` + html;
     document.getElementById('tabs').innerHTML = renderTabs(route.tab);
 
@@ -1338,19 +1374,20 @@
     const title = pageTitle;
     document.getElementById('topTitle').textContent = title;
     // F4：浏览器标题跟随路由，多标签/书签/分享才分得清页面
-    document.title = route.detail
-      ? `${pageTitle} · MyWorld`
-      : route.tab === 'home'
-        ? 'MyWorld · 行程记录'
-        : `${pageTitle} · MyWorld`;
+    document.title =
+      route.detail || route.sub
+        ? `${pageTitle} · MyWorld`
+        : route.tab === 'home'
+          ? 'MyWorld · 行程记录'
+          : `${pageTitle} · MyWorld`;
 
     const back = document.getElementById('back');
-    back.style.display = route.detail ? 'flex' : 'none';
+    back.style.display = route.detail || route.sub ? 'flex' : 'none';
 
     if (route.detail) mountTrackMap(route.trackId);
     else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
     else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
-    else if (route.tab === 'home') mountCityMap();
+    else if (route.tab === 'home' && !route.sub) mountCityMap();
 
     if (reason !== 'keep') window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -1488,28 +1525,6 @@
     const fold = e.target.closest('[data-fold]');
     if (fold) {
       fold.closest('.fold').classList.toggle('is-open');
-      return;
-    }
-
-    // 游历城市明细弹层：打开/关闭。遮罩和「完成」共用 data-sheetclose
-    const citiesBtn = e.target.closest('[data-citiesdetail]');
-    if (citiesBtn) {
-      const sheet = document.getElementById('citiesSheet');
-      if (sheet) {
-        sheet.hidden = false;
-        requestAnimationFrame(() => sheet.classList.add('is-open'));
-      }
-      return;
-    }
-    const sheetClose = e.target.closest('[data-sheetclose]');
-    if (sheetClose) {
-      const sheet = sheetClose.closest('.sheet');
-      if (sheet) {
-        sheet.classList.remove('is-open');
-        setTimeout(() => {
-          sheet.hidden = true;
-        }, 220);
-      }
       return;
     }
 
