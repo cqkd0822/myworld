@@ -538,7 +538,7 @@
   function mountCityMap() {
     const host = document.getElementById('cityMapHost');
     if (!host) return;
-    M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#5aa2ff' });
+    M.routemap.renderCityMap(host, overview.citiesAll);
     addMapExpandBtn(host);
   }
 

@@ -20,6 +20,9 @@
 
   let current = null;
 
+  /** 游历城市小红旗的旗面红。不用琥珀/品牌蓝——那两色一个撞底图 POI、一个融底图。 */
+  const FLAG_RED = '#e8403a';
+
   /** '#rrggbb' + 透明度 → 'rgba(r,g,b,a)'。PolylineStyle 没有 opacity 选项。 */
   function tint(hex, a) {
     const h = String(hex || '').replace('#', '');
@@ -178,23 +181,70 @@
   }
 
   /**
-   * 城市环标：空心圆环 + 外发光，环心留空。
+   * 小红旗：旗杆底端（含定位小圆点）锚在城市实际坐标上，旗面向右飘。
    *
-   * 游历城市一开始用的是 dotDataUri（白芯 + 黄色描边），形态和腾讯底图自带的
-   * POI 点（小黄实心圆）几乎一样，站在用户视角根本分不清哪个是「我去过的」。
-   * 改成空心环后形态上就不同源了；环心透出底图，也不会像实心点那样把 POI 图标糊掉。
-   * 返回 { uri, size }，尺寸只在这里算一次（MarkerStyle 只收整数）。
+   * 游历城市标记走过两版：先是「白芯+琥珀描边」实心点，和腾讯底图自带的
+   * POI 小黄圆同源，用户分不清哪个是「去过的」；改成蓝色空心环后用户又
+   * 指定要小红旗——底图上红/黄的语义（POI）也不搭。旗面红 #e8403a、
+   * 杆用浅灰白，深色底图上对比够。
+   * 返回 { uri, w, h, anchorX, anchorY }，尺寸只在这里算一次
+   * （MarkerStyle 只收整数）。
    */
-  function ringDataUri(color, r, opts) {
-    const stroke = (opts && opts.stroke) || 2.2;
-    const glow = (opts && opts.glow) || 3.2;
-    const size = Math.round(r + glow + 1.4) * 2;
-    const c = size / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-<circle cx="${c}" cy="${c}" r="${r + glow}" fill="${color}" opacity="0.13"/>
-<circle cx="${c}" cy="${c}" r="${r + stroke / 2 + 0.9}" fill="none" stroke="rgba(6,11,22,.6)" stroke-width="1.2"/>
-<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"/></svg>`;
-    return { uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), size };
+  function flagDataUri(color, fh) {
+    const fw = Math.round(fh * 0.62);
+    const poleX = 2.5;
+    const w = Math.round(poleX + fw + 2);
+    const h = Math.round(fh + 2);
+    const bottom = h - 1;
+    const top = bottom - fh;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+<path d="M${poleX},${top} h${fw} v${Math.round(fh * 0.62)} h-${fw} z" fill="${color}"/>
+<path d="M${poleX},${top} v${fh}" fill="none" stroke="#cfd8e8" stroke-width="1.4" stroke-linecap="round"/>
+<circle cx="${poleX}" cy="${bottom}" r="1.4" fill="#cfd8e8"/></svg>`;
+    return {
+      uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+      w,
+      h,
+      anchorX: poleX,
+      anchorY: bottom,
+    };
+  }
+
+  /**
+   * 带城市名的小红旗。旗在右、名字在旗右侧；side='left' 时镜像——
+   * 名字画到旗杆左边，给挨太近的城市（北京/天津、成都/重庆）避让。
+   * 尺寸坑见 labeledDotUri 注释：宽高必须和 SVG 一致且为整数。
+   */
+  function labeledFlagUri(name, color, fh, side) {
+    const fs = 12;
+    const fw = Math.round(fh * 0.62);
+    const poleX = 2.5;
+    const gap = 5;
+    const textW = [...String(name)].length * fs + 6;
+    const w = Math.round(poleX + fw + gap + textW + 2);
+    const h = Math.round(fh + 2);
+    const bottom = h - 1;
+    const top = bottom - fh;
+    const left = side === 'left';
+    const px = left ? w - (fw + 2.5) : poleX;
+    const tx = left ? px - gap : px + fw + gap;
+    const fill = '#f1f5f9';
+    const halo = 'rgba(8,15,30,.85)';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+<path d="M${px},${top} h${fw} v${Math.round(fh * 0.62)} h-${fw} z" fill="${color}"/>
+<path d="M${px},${top} v${fh}" fill="none" stroke="#cfd8e8" stroke-width="1.4" stroke-linecap="round"/>
+<circle cx="${px}" cy="${bottom}" r="1.4" fill="#cfd8e8"/>
+<text x="${tx}" y="${top + fh * 0.31}" font-size="${fs}" fill="${fill}" stroke="${halo}" stroke-width="3"
+  paint-order="stroke" stroke-linejoin="round" dominant-baseline="central"
+  text-anchor="${left ? 'end' : 'start'}"
+  font-family="-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">${name}</text></svg>`;
+    return {
+      uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+      w,
+      h,
+      anchorX: px,
+      anchorY: bottom,
+    };
   }
 
   /**
@@ -212,11 +262,10 @@
    * 2) side='left' 把文字画到光点左边，用来给挨得太近的城市（北京/天津、
    *    成都/重庆）错开标注，否则两个标签直接叠字。
    */
-  function labeledDotUri(name, color, r, dark, side, shape) {
+  function labeledDotUri(name, color, r, dark, side) {
     const fs = 12;
     const chars = [...String(name)].length;
-    const ring = shape === 'ring';
-    const dotR = ring ? r + 3.2 : r + 2.5;
+    const dotR = r + 2.5;
     const gap = 5;
     const textW = chars * fs + 6;
     const w = Math.round(dotR + 3 + dotR + gap + textW);
@@ -227,15 +276,10 @@
     const tx = left ? cx - dotR - gap : cx + dotR + gap;
     const fill = dark ? '#f1f5f9' : '#1f2937';
     const halo = dark ? 'rgba(8,15,30,.85)' : '#ffffff';
-    const head = ring
-      ? `<circle cx="${cx}" cy="${cy}" r="${r + 3.2}" fill="${color}" opacity="0.13"/>
-<circle cx="${cx}" cy="${cy}" r="${r + 2}" fill="none" stroke="rgba(6,11,22,.6)" stroke-width="1.2"/>
-<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="2.2"/>`
-      : `<circle cx="${cx}" cy="${cy}" r="${r + 2.4}" fill="${color}" opacity="0.28"/>
-<circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff"/>
-<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.8"/>`;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-${head}
+<circle cx="${cx}" cy="${cy}" r="${r + 2.4}" fill="${color}" opacity="0.28"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.8"/>
 <text x="${tx}" y="${cy}" font-size="${fs}" fill="${fill}" stroke="${halo}" stroke-width="3"
   paint-order="stroke" stroke-linejoin="round" dominant-baseline="central"
   text-anchor="${left ? 'end' : 'start'}"
@@ -572,11 +616,10 @@ ${head}
   /* 游历城市地图：把去过的城市在深色底图上点亮                            */
   /* ------------------------------------------------------------------ */
 
-  /** 离线 SVG：全国固定框内画城市环标（底图挂了也能看）。 */
+  /** 离线 SVG：全国固定框内画城市小红旗（底图挂了也能看），与在线标记同一套视觉。 */
   function svgCityDots(pts, opts) {
     const width = (opts && opts.width) || 680;
     const height = (opts && opts.height) || 420;
-    const accent = (opts && opts.accent) || '#5aa2ff';
     const LAT0 = 18, LAT1 = 51, LNG0 = 76, LNG1 = 134;
     const kx = Math.cos((((LAT0 + LAT1) / 2) * Math.PI) / 180);
     const s = Math.min((width - 24) / ((LNG1 - LNG0) * kx), (height - 24) / (LAT1 - LAT0));
@@ -586,10 +629,12 @@ ${head}
     const dots = pts
       .map((p) => {
         const [x, y] = project(p.pos);
-        const r = 2.6 + Math.min(3.4, p.total / 7);
+        const fh = 8 + Math.min(5, p.total / 6);
+        const fw = fh * 0.62;
+        const top = y - fh;
         return (
-          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 3).toFixed(1)}" fill="${accent}" opacity="0.13"/>` +
-          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="${accent}" stroke-width="1.7"/>`
+          `<path d="M${x.toFixed(1)},${top.toFixed(1)} h${fw.toFixed(1)} v${(fh * 0.62).toFixed(1)} h-${fw.toFixed(1)} z" fill="${FLAG_RED}"/>` +
+          `<line x1="${x.toFixed(1)}" y1="${top.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#cfd8e8" stroke-width="1.1"/>`
         );
       })
       .join('');
@@ -613,8 +658,6 @@ ${head}
    */
   function renderCityMap(container, cities, opts) {
     destroy();
-    const accent = (opts && opts.accent) || '#5aa2ff';
-    const dark = true;
     const pts = (cities || [])
       .map(([c, total, o]) => ({ c, total, o, pos: M.cityCoords[c] }))
       .filter((p) => p.pos);
@@ -623,7 +666,7 @@ ${head}
       return { fallback: Promise.resolve(null) };
     }
 
-    container.innerHTML = `<div class="map-offline" style="position:absolute;inset:0">${svgCityDots(pts, { accent })}</div>`;
+    container.innerHTML = `<div class="map-offline" style="position:absolute;inset:0">${svgCityDots(pts)}</div>`;
     const hint = document.createElement('div');
     hint.style.cssText =
       'position:absolute;left:10px;bottom:10px;z-index:5;background:rgba(12,18,32,.85);' +
@@ -650,20 +693,20 @@ ${head}
         }
 
         const layers = [];
-        const bigRing = ringDataUri(accent, 5.8);
-        const smallRing = ringDataUri(accent, 4);
+        const bigFlag = flagDataUri(FLAG_RED, 14);
+        const smallFlag = flagDataUri(FLAG_RED, 11);
         const plainStyles = {
           big: new TMap.MarkerStyle({
-            width: bigRing.size,
-            height: bigRing.size,
-            anchor: { x: bigRing.size / 2, y: bigRing.size / 2 },
-            src: bigRing.uri,
+            width: bigFlag.w,
+            height: bigFlag.h,
+            anchor: { x: bigFlag.anchorX, y: bigFlag.anchorY },
+            src: bigFlag.uri,
           }),
           small: new TMap.MarkerStyle({
-            width: smallRing.size,
-            height: smallRing.size,
-            anchor: { x: smallRing.size / 2, y: smallRing.size / 2 },
-            src: smallRing.uri,
+            width: smallFlag.w,
+            height: smallFlag.h,
+            anchor: { x: smallFlag.anchorX, y: smallFlag.anchorY },
+            src: smallFlag.uri,
           }),
         };
         const plainGeoms = [];
@@ -678,8 +721,8 @@ ${head}
           if (labeled.has(p.c)) {
             const clash = placed.some(([la, lo]) => Math.hypot(la - p.pos[0], lo - p.pos[1]) < 3);
             placed.push(p.pos);
-            const r = p.total >= 8 ? 5 : 4;
-            const lab = labeledDotUri(p.c, accent, r, dark, clash ? 'left' : 'right', 'ring');
+            const fh = p.total >= 8 ? 13 : 11;
+            const lab = labeledFlagUri(p.c, FLAG_RED, fh, clash ? 'left' : 'right');
             const sk = 'c' + labelGeoms.length;
             labelStyles[sk] = new TMap.MarkerStyle({
               width: lab.w,
