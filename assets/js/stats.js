@@ -315,7 +315,7 @@
       `<div class="st-inline">
       <div><b>${(s.km / 10000).toFixed(1)}<i>万</i></b><span>公里<br>约绕地球 ${(s.km / 40075).toFixed(1)} 圈</span></div>
       <div><b>${hoursTotal}<i>h</i></b><span>空中时间<br>纯飞行时长合计</span></div>
-      <div><b>${s.delayKnown ? Math.round((s.onTime / s.delayKnown) * 100) : '--'}<i>%</i></b><span>准点率<br>${s.onTime}/${s.delayKnown} 段 · 到达 ≤15 分（A15）</span></div>
+      <div><b>${s.delayKnown ? Math.round((s.onTime / s.delayKnown) * 100) : '--'}<i>%</i></b><span>准点率<br>${s.onTime}/${s.delayKnown} 段 · 到达 ≤15 分</span></div>
     </div>`,
     );
 

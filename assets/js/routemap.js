@@ -178,6 +178,26 @@
   }
 
   /**
+   * 城市环标：空心圆环 + 外发光，环心留空。
+   *
+   * 游历城市一开始用的是 dotDataUri（白芯 + 黄色描边），形态和腾讯底图自带的
+   * POI 点（小黄实心圆）几乎一样，站在用户视角根本分不清哪个是「我去过的」。
+   * 改成空心环后形态上就不同源了；环心透出底图，也不会像实心点那样把 POI 图标糊掉。
+   * 返回 { uri, size }，尺寸只在这里算一次（MarkerStyle 只收整数）。
+   */
+  function ringDataUri(color, r, opts) {
+    const stroke = (opts && opts.stroke) || 2.2;
+    const glow = (opts && opts.glow) || 3.2;
+    const size = Math.round(r + glow + 1.4) * 2;
+    const c = size / 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+<circle cx="${c}" cy="${c}" r="${r + glow}" fill="${color}" opacity="0.13"/>
+<circle cx="${c}" cy="${c}" r="${r + stroke / 2 + 0.9}" fill="none" stroke="rgba(6,11,22,.6)" stroke-width="1.2"/>
+<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"/></svg>`;
+    return { uri: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), size };
+  }
+
+  /**
    * 带城市名的光点。名字直接画进 SVG 里而不是用 MultiLabel——
    * 后者在部分 GL JS 版本上不渲染，光点却从来没让我们失望过。
    * 白描边保证在深浅两种底图上都读得清。
@@ -192,10 +212,11 @@
    * 2) side='left' 把文字画到光点左边，用来给挨得太近的城市（北京/天津、
    *    成都/重庆）错开标注，否则两个标签直接叠字。
    */
-  function labeledDotUri(name, color, r, dark, side) {
+  function labeledDotUri(name, color, r, dark, side, shape) {
     const fs = 12;
     const chars = [...String(name)].length;
-    const dotR = r + 2.5;
+    const ring = shape === 'ring';
+    const dotR = ring ? r + 3.2 : r + 2.5;
     const gap = 5;
     const textW = chars * fs + 6;
     const w = Math.round(dotR + 3 + dotR + gap + textW);
@@ -206,10 +227,15 @@
     const tx = left ? cx - dotR - gap : cx + dotR + gap;
     const fill = dark ? '#f1f5f9' : '#1f2937';
     const halo = dark ? 'rgba(8,15,30,.85)' : '#ffffff';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-<circle cx="${cx}" cy="${cy}" r="${r + 2.4}" fill="${color}" opacity="0.28"/>
+    const head = ring
+      ? `<circle cx="${cx}" cy="${cy}" r="${r + 3.2}" fill="${color}" opacity="0.13"/>
+<circle cx="${cx}" cy="${cy}" r="${r + 2}" fill="none" stroke="rgba(6,11,22,.6)" stroke-width="1.2"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="2.2"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="${r + 2.4}" fill="${color}" opacity="0.28"/>
 <circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffffff"/>
-<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.8"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="1.8"/>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+${head}
 <text x="${tx}" y="${cy}" font-size="${fs}" fill="${fill}" stroke="${halo}" stroke-width="3"
   paint-order="stroke" stroke-linejoin="round" dominant-baseline="central"
   text-anchor="${left ? 'end' : 'start'}"
@@ -546,11 +572,11 @@
   /* 游历城市地图：把去过的城市在深色底图上点亮                            */
   /* ------------------------------------------------------------------ */
 
-  /** 离线 SVG：全国固定框内画城市光点（底图挂了也能看）。 */
+  /** 离线 SVG：全国固定框内画城市环标（底图挂了也能看）。 */
   function svgCityDots(pts, opts) {
     const width = (opts && opts.width) || 680;
     const height = (opts && opts.height) || 420;
-    const accent = (opts && opts.accent) || '#ffc247';
+    const accent = (opts && opts.accent) || '#5aa2ff';
     const LAT0 = 18, LAT1 = 51, LNG0 = 76, LNG1 = 134;
     const kx = Math.cos((((LAT0 + LAT1) / 2) * Math.PI) / 180);
     const s = Math.min((width - 24) / ((LNG1 - LNG0) * kx), (height - 24) / (LAT1 - LAT0));
@@ -560,10 +586,10 @@
     const dots = pts
       .map((p) => {
         const [x, y] = project(p.pos);
-        const r = 2.5 + Math.min(4, p.total / 6);
+        const r = 2.6 + Math.min(3.4, p.total / 7);
         return (
-          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 3).toFixed(1)}" fill="${accent}" opacity="0.18"/>` +
-          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#ffffff" stroke="${accent}" stroke-width="1.6"/>`
+          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(r + 3).toFixed(1)}" fill="${accent}" opacity="0.13"/>` +
+          `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="${accent}" stroke-width="1.7"/>`
         );
       })
       .join('');
@@ -587,7 +613,7 @@
    */
   function renderCityMap(container, cities, opts) {
     destroy();
-    const accent = (opts && opts.accent) || '#ffc247';
+    const accent = (opts && opts.accent) || '#5aa2ff';
     const dark = true;
     const pts = (cities || [])
       .map(([c, total, o]) => ({ c, total, o, pos: M.cityCoords[c] }))
@@ -624,9 +650,21 @@
         }
 
         const layers = [];
+        const bigRing = ringDataUri(accent, 5.8);
+        const smallRing = ringDataUri(accent, 4);
         const plainStyles = {
-          big: new TMap.MarkerStyle({ width: 14, height: 14, anchor: { x: 7, y: 7 }, src: dotDataUri(accent, 4) }),
-          small: new TMap.MarkerStyle({ width: 10, height: 10, anchor: { x: 5, y: 5 }, src: dotDataUri(accent, 2.2) }),
+          big: new TMap.MarkerStyle({
+            width: bigRing.size,
+            height: bigRing.size,
+            anchor: { x: bigRing.size / 2, y: bigRing.size / 2 },
+            src: bigRing.uri,
+          }),
+          small: new TMap.MarkerStyle({
+            width: smallRing.size,
+            height: smallRing.size,
+            anchor: { x: smallRing.size / 2, y: smallRing.size / 2 },
+            src: smallRing.uri,
+          }),
         };
         const plainGeoms = [];
         const labelStyles = {};
@@ -640,8 +678,8 @@
           if (labeled.has(p.c)) {
             const clash = placed.some(([la, lo]) => Math.hypot(la - p.pos[0], lo - p.pos[1]) < 3);
             placed.push(p.pos);
-            const r = p.total >= 8 ? 3 : 2.5;
-            const lab = labeledDotUri(p.c, accent, r, dark, clash ? 'left' : 'right');
+            const r = p.total >= 8 ? 5 : 4;
+            const lab = labeledDotUri(p.c, accent, r, dark, clash ? 'left' : 'right', 'ring');
             const sk = 'c' + labelGeoms.length;
             labelStyles[sk] = new TMap.MarkerStyle({
               width: lab.w,

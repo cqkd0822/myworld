@@ -538,7 +538,7 @@
   function mountCityMap() {
     const host = document.getElementById('cityMapHost');
     if (!host) return;
-    M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#ffc247' });
+    M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#5aa2ff' });
     addMapExpandBtn(host);
   }
 
@@ -769,7 +769,7 @@
       <div class="stat">
         <div class="stat__label">准点率</div>
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
-        <div class="stat__foot">${overview.onTime}/${overview.delayKnown} 段 · 口径：到达不晚于计划 +15 分（A15）</div>
+        <div class="stat__foot">${overview.onTime}/${overview.delayKnown} 段 · 到达不晚于计划 15 分钟</div>
       </div>
     </div>
   </section>
