@@ -647,7 +647,13 @@
   function viewCities() {
     const all = overview.citiesAll;
     const q = state.cityQuery.trim().toLowerCase();
-    const rows = q ? all.filter(([c]) => String(c).toLowerCase().includes(q)) : all;
+    const prov = (c) => M.cityProvince[c] || '';
+    // 省份也进搜索：输「江西」能一次捞出萍乡/南昌/鹰潭/抚州/宜春/上饶
+    const rows = q
+      ? all.filter(
+          ([c]) => String(c).toLowerCase().includes(q) || prov(c).toLowerCase().includes(q),
+        )
+      : all;
     // 排名按全量算：搜索后剩下的行仍显示它在总榜的名次，不会变成 1、2、3
     const rank = new Map(all.map(([c], i) => [c, i + 1]));
     const sum = all.reduce(
@@ -658,24 +664,29 @@
       }),
       { f: 0, r: 0, t: 0 },
     );
+    // 省份去重计数，给统计条用
+    const provCount = new Set(all.map(([c]) => prov(c)).filter(Boolean)).size;
 
     const list = rows
-      .map(
-        ([city, total, o]) => `<div class="cityrow">
+      .map(([city, total, o]) => {
+        const p = prov(city);
+        return `<div class="cityrow">
       <span class="cityrow__rank">${rank.get(city)}</span>
-      <b>${esc(city)}</b>
+      <span class="cityrow__place">${
+        p && p !== city ? `<i>${esc(p)}</i>` : ''
+      }${esc(city)}</span>
       <span class="cityrow__n">${total} 次</span>
       <span class="cityrow__src">
         ${o.flight ? `<i class="src src--flight">飞 ${o.flight}</i>` : ''}
         ${o.rail ? `<i class="src src--rail">铁 ${o.rail}</i>` : ''}
         ${o.track ? `<i class="src src--track">徒 ${o.track}</i>` : ''}
       </span>
-    </div>`,
-      )
+    </div>`;
+      })
       .join('');
 
     return `<div class="controls">
-    <div class="searchrow"><input class="search" type="search" id="q-city" data-q="cityQuery" aria-label="搜索城市" placeholder="搜城市名" value="${esc(state.cityQuery)}"></div>
+    <div class="searchrow"><input class="search" type="search" id="q-city" data-q="cityQuery" aria-label="搜索城市或省份" placeholder="搜城市 / 省份" value="${esc(state.cityQuery)}"></div>
   </div>
 
   <div class="citysum">
@@ -687,12 +698,12 @@
 
   <div class="section__head">
     <h2 class="section__title">${q ? `${rows.length} 个匹配` : '按到访次数'}</h2>
-    <span class="section__hint">${q ? `共 ${all.length} 座` : '同一城市多次只占一行'}</span>
+    <span class="section__hint">${q ? `共 ${all.length} 座` : `${provCount} 个省级区划`}</span>
   </div>
 
   <div class="card citylist">${list || '<div class="empty">没有匹配的城市</div>'}</div>
 
-  <p class="citynote">飞行、铁路按<strong>每段的到达城市</strong>计（换乘经停也算一次到访）；足迹按轨迹所在城市计。三源合并后按次数降序。</p>`;
+  <p class="citynote">飞行、铁路按<strong>每段的到达城市</strong>计（换乘经停也算一次到访）；足迹按轨迹所在城市计。三源合并后按次数降序，城市前的灰字是所属省级行政区。</p>`;
   }
 
   function viewHome() {

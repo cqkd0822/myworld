@@ -2629,12 +2629,26 @@ body.map-expanded {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.cityrow b {
-  width: 66px;
+/* 城市名（前面可带省份）。flex:1 吃掉剩余宽度，把次数和来源推到右边 */
+.cityrow__place {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 省份：小一号灰字，与城市名同行；直辖市省名 == 市名时不渲染（见 viewCities） */
+.cityrow__place i {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-right: 6px;
 }
 .cityrow__n {
+  min-width: 42px;
+  text-align: right;
   color: var(--ink-2);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
