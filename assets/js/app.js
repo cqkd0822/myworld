@@ -1117,7 +1117,8 @@
       M.map.destroy();
       mapRef = null;
     }
-    M.routemap.destroy();
+    // routemap 是懒加载模块：没进过地图页时它还不存在（直接开 #/rail/list 就会命中）
+    if (M.routemap) M.routemap.destroy();
 
     let html;
     if (route.detail) html = viewTrackDetail(route.trackId);
