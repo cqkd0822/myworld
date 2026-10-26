@@ -810,6 +810,19 @@ const MANIFEST = [
     eleThresholdM: 10,
   },
   {
+    // 企业微信收件 GPX（GPSBabel 导出，CRLF 已归一为 LF）。10-18 原计划 G1372 宜春返杭
+    // （后改签 10-25），当天早上改跑西湖群山环线：吴山起、经五云山/之江/虎跑侧回吴山。
+    id: "2026-10-18-hangzhou-xihu-qunshan",
+    file: "2026-10-18-hangzhou-xihu-qunshan.gpx",
+    name: "杭州西湖群山环线越野跑",
+    date: "2026-10-18",
+    region: "浙江 · 杭州",
+    kind: "run",
+    color: "#22d3ee",
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
     // 10-23 K515 杭州南→萍乡（软卧过夜车），10-24 上山两日穿越，10-25 G1422 宜春→杭州东返回。
     // 源文件为企业微信收件 GPX（GPSBabel 导出）：原文件第 2522 个点 ele=0 是单点 dropout
     //（邻居 1870/1872），入库前插值修成 1871——否则累计爬升会被虚增约 1900 m、最低海拔显示 0。
