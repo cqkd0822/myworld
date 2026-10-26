@@ -26,6 +26,26 @@ const JSON_HEADERS = {
   'access-control-allow-origin': '*',
 };
 
+/**
+ * 带 ETag 的 JSON 响应：SW 走 stale-while-revalidate 后，后台再验证靠它拿 304，
+ * 省掉每次回访重复传 30~40 KB 列表。SHA-1 取前 16 hex 做指纹，CPU 亚毫秒。
+ */
+async function jsonWithEtag(request, data, ttl = 300) {
+  const body = JSON.stringify(data);
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(body));
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const etag = `"${hex.slice(0, 16)}"`;
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: { etag, 'cache-control': `public, max-age=${ttl}` },
+    });
+  }
+  return new Response(body, {
+    headers: { ...JSON_HEADERS, 'cache-control': `public, max-age=${ttl}`, etag },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -84,7 +104,8 @@ export default {
         const { results } = await env.DB.prepare(
           'SELECT id,date,airline,flight_no,from_raw,to_raw,aircraft,reg,std,sta,ata,cabin,seat,price,delay,note FROM flights ORDER BY id',
         ).all();
-        return json(
+        return jsonWithEtag(
+          request,
           results.map((x) => [
             x.id, x.date, x.airline, x.flight_no, x.from_raw, x.to_raw, x.aircraft, x.reg,
             x.std, x.sta, x.ata, x.cabin, x.seat, x.price, x.delay, x.note || '',
@@ -96,14 +117,20 @@ export default {
         const { results } = await env.DB.prepare(
           'SELECT id,date,train,from_station,to_station,seat,note FROM rail ORDER BY id',
         ).all();
-        return json(results.map((x) => [x.id, x.date, x.train, x.from_station, x.to_station, x.seat, x.note]));
+        return jsonWithEtag(
+          request,
+          results.map((x) => [x.id, x.date, x.train, x.from_station, x.to_station, x.seat, x.note]),
+        );
       }
 
       if (path === '/api/rail-voided') {
         const { results } = await env.DB.prepare(
           'SELECT train,from_station,to_station,date,reason FROM rail_voided ORDER BY id',
         ).all();
-        return json(results.map((x) => [x.train, x.from_station, x.to_station, x.date, x.reason]));
+        return jsonWithEtag(
+          request,
+          results.map((x) => [x.train, x.from_station, x.to_station, x.date, x.reason]),
+        );
       }
 
       if (path === '/api/tracks') {
@@ -116,7 +143,8 @@ export default {
                   center_lat,center_lng,center_zoom
              FROM tracks ORDER BY date`,
         ).all();
-        return json(
+        return jsonWithEtag(
+          request,
           results.map((x) => ({
             id: x.id, name: x.name, date: x.date, region: x.region, kind: x.kind, color: x.color,
             startTime: x.start_time, endTime: x.end_time,

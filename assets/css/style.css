@@ -2155,3 +2155,151 @@ a {
 .citymap .tmap-scale-control {
   display: none;
 }
+
+/* ==========================================================================
+   2026-10-26 · 手机视图重设计 + F7 桌面档
+   约定：基础样式（mobile-first）一行不改，全部以「覆盖 + 新增」追加在这里；
+   桌面规则只存在于 min-width:1000px 块内，手机视口匹配不到，零回归风险。
+   ========================================================================== */
+
+/* ---- F2/F10 数据状态横幅（非 sticky：出现时在顶栏下，滚动即走） ---- */
+.netbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--line);
+}
+.netbar--bad { background: var(--warn-soft); color: var(--warn); }
+.netbar--warn { background: var(--amber-soft); color: var(--amber); }
+.netbar__btn {
+  font: inherit;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 12px;
+  min-height: 26px;
+  flex: 0 0 auto;
+}
+.netbar__btn:disabled { opacity: 0.5; }
+
+/* ---- 列表控制簇：搜索在上 + 单条 chips 滚动条，吸顶在顶栏下 ----
+   老 .filters 是「label 行 + chips 行」×N 维度 + 搜索行，航班页要吃掉
+   ~220px 竖向空间；现在固定 ~96px，且滚动长列表时筛选始终在手边。 ---- */
+.controls {
+  position: sticky;
+  top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  z-index: 30;
+  margin: 0 -16px 12px;
+  padding: 10px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(12, 18, 32, 0.92);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.controls .searchrow { margin: 0; }
+.chips__sep {
+  flex: 0 0 1px;
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 8px;
+  align-self: center;
+}
+
+/* ---- 航班卡：tag 上移右对齐；中间只留细线；城市+机场合并一行 ---- */
+.flight__top .tag { margin-left: auto; flex: 0 0 auto; }
+.flight__body { grid-template-columns: 1fr 36px 1fr; gap: 6px; }
+.endpoint__place {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.endpoint__place b {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.endpoint__place span {
+  font-size: 11px;
+  color: var(--ink-3);
+  min-width: 0;
+}
+.endpoint--to .endpoint__place { justify-content: flex-end; text-align: right; }
+.route { min-width: 36px; }
+.flight__meta { font-size: 12px; color: var(--ink-2); }
+.flight__note {
+  padding: 0 14px 12px;
+  margin-top: -2px;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
+/* ---- 铁路卡：日期右对齐进路线行；备注改脚注 ---- */
+.rail__date {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  padding-left: 8px;
+}
+.rail__note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
+/* ---- 节奏与触控 ---- */
+.year-head { margin: 16px 0 8px; font-size: 12px; }
+.chip { min-height: 30px; display: inline-flex; align-items: center; }
+.btn { min-height: 40px; }
+@media (max-width: 699px) {
+  /* 详情页主操作在手机上给足宽度 */
+  [data-dlgpx] { flex: 1 1 auto; }
+}
+
+/* ---- F7 桌面档（≥1000px）：只在这里放宽，手机匹配不到 ---- */
+@media (min-width: 1000px) {
+  .wrap { max-width: 1040px; }
+  .controls {
+    position: static;
+    margin: 0 0 14px;
+    padding: 14px 0 10px;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: 0;
+  }
+  .group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .kv { grid-template-columns: repeat(3, 1fr); }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .detail__map { height: 460px; }
+  .flight__body { grid-template-columns: 1fr 96px 1fr; }
+  .endpoint__time { font-size: 22px; }
+  .endpoint__place b { font-size: 14px; }
+  .endpoint__place span { font-size: 12px; }
+}
+
+/* F9：概览「记录截至」角标 */
+.hero__horizon {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}

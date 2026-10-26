@@ -45,6 +45,9 @@
   let rails = [];
   let voided = [];
   let tracks = [];
+  /** 'ok' | 'stale'(SW 缓存或断网回落) | 'failed'(拉取失败且无缓存) */
+  let dataState = 'ok';
+  let lastFetchAt = 0;
   let overview = null;
   let flightYears = [];
   let railYears = [];
@@ -63,6 +66,31 @@
     flightYears = [...overview.flightsByYear.keys()].sort((a, b) => b - a);
     railYears = [...overview.railsByYear.keys()].sort((a, b) => b - a);
     airlineNames = overview.airlines.map((a) => a[0]);
+  }
+
+  /**
+   * F8：stats.js / routemap.js 按需注入。两者 gzip 共 18.4 KB，但只在
+   * 统计/航迹图/概览城市图里用；只看列表的用户首屏不必付这笔钱。
+   * 版本号从 app.js 自己的 ?v= 上读，保证与 bump-cache 同步。
+   */
+  const assetV = (() => {
+    const el = document.querySelector('script[src*="assets/js/app.js"]');
+    const m = el && el.src.match(/[?&]v=([a-f0-9]+)/);
+    return m ? m[1] : '';
+  })();
+  const modLoading = {};
+  function ensureMod(name) {
+    if (window.MYWORLD && window.MYWORLD[name]) return Promise.resolve();
+    if (!modLoading[name]) {
+      modLoading[name] = new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = `assets/js/${name}.js${assetV ? `?v=${assetV}` : ''}`;
+        s.onload = () => res();
+        s.onerror = () => rej(new Error(`${name}.js 加载失败`));
+        document.head.appendChild(s);
+      });
+    }
+    return modLoading[name];
   }
 
   /** 同域 API；4 秒超时，workers.dev 被掐的网络上也不会拖死首屏 */
@@ -84,10 +112,55 @@
       M.rail = await r.json();
       M.railVoided = await v.json();
       M.tracks = await t.json();
+      dataState = 'ok';
+      lastFetchAt = Date.now();
       return true;
     } catch (e) {
+      dataState = 'failed';
       return false;
     }
+  }
+
+  /**
+   * 顶部状态横幅：把「加载失败」和「正在看缓存」从「没有数据」里区分出来。
+   * 老行为是失败时静默渲染空列表 + 「这个筛选条件下没有记录」，
+   * 公司网掐 workers.dev 时用户会以为数据没了。
+   */
+  function setNetBar() {
+    let el = document.getElementById('netbar');
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    const msg =
+      dataState === 'failed'
+        ? ['netbar--bad', '行程数据加载失败（网络或接口异常），当前显示为空。', '重试']
+        : offline
+          ? ['netbar--warn', '网络已断开，正在显示上次缓存的数据。', '刷新']
+          : dataState === 'stale'
+            ? ['netbar--warn', '正在显示离线缓存的数据，可能不是最新。', '刷新']
+            : null;
+    if (!msg) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'netbar';
+      document.body.insertBefore(el, document.querySelector('main'));
+      el.addEventListener('click', async (e) => {
+        if (!e.target.closest('[data-retry]')) return;
+        el.querySelector('[data-retry]').disabled = true;
+        const ok = await loadRemote();
+        if (ok) {
+          initDatas();
+          dataState = 'ok';
+          setNetBar();
+          render('keep');
+        } else {
+          el.querySelector('[data-retry]').disabled = false;
+        }
+      });
+    }
+    el.className = msg[0];
+    el.innerHTML = `<span>${msg[1]}</span><button class="netbar__btn" type="button" data-retry>${msg[2]}</button>`;
   }
 
   /**
@@ -194,6 +267,8 @@
     const km = f.distanceKm ? `${U.formatNumber(f.distanceKm)} km` : '';
 
     const meta = [];
+    if (dur) meta.push(dur);
+    if (km) meta.push(km);
     meta.push(esc(f.aircraft));
     if (f.cabin) meta.push(esc(f.cabin) + (f.seat && f.seat !== '--' ? ` · ${esc(f.seat)}` : ''));
     meta.push(
@@ -207,40 +282,36 @@
     // 用户给这段行程加的备注（D1 flights.note）
     if (f.note) notes.push(f.note);
 
+    // 2026-10 手机重设计：准点 tag 上移到首行右侧；中间只留航线细线，
+    // 历时/里程下移到 meta 行——390px 宽下两端城市+机场才放得开。
     return `<article class="flight">
   <div class="flight__top">
     <span class="flight__date">${f.date ? `${f.date.text} ${f.date.weekday}` : f.dateRaw}</span>
     <span class="flight__no">${esc(f.flightNo)}</span>
     <span class="flight__airline">${esc(f.airline)}</span>
+    <span class="tag ${tag.cls}">${tag.text}</span>
   </div>
   <div class="flight__body">
     <div class="endpoint">
       <div class="endpoint__time">${depTime}</div>
-      <div class="endpoint__city">${esc(f.from.city)}</div>
-      <div class="endpoint__port">${esc(fromPort || '—')}</div>
+      <div class="endpoint__place"><b>${esc(f.from.city)}</b><span>${esc(fromPort || '—')}</span></div>
     </div>
     <div class="route">
-      <div class="route__dur">${dur}</div>
       <div class="route__line"><span class="route__dash"></span><span class="route__plane">${
         icon.planeSmall
       }</span></div>
-      <div class="route__dur">${km}</div>
     </div>
     <div class="endpoint endpoint--to">
       <div class="endpoint__time">${arrTime}${arrSup}</div>
-      <div class="endpoint__city">${esc(f.to.city)}</div>
-      <div class="endpoint__port">${esc(toPort || '—')}</div>
+      <div class="endpoint__place"><b>${esc(f.to.city)}</b><span>${esc(toPort || '—')}</span></div>
     </div>
   </div>
   <div class="flight__bottom">
     <div class="flight__meta">${meta.map(esc0).join('<i class="dot"></i>')}</div>
-    <span class="tag ${tag.cls}">${tag.text}</span>
   </div>
   ${
     notes.length
-      ? `<div class="flight__bottom" style="border-top:0;padding-top:0"><div class="flight__meta" style="color:var(--ink-3)">${notes
-          .map(esc)
-          .join(' · ')}</div></div>`
+      ? `<div class="flight__note">${notes.map(esc).join(' · ')}</div>`
       : ''
   }
 </article>`;
@@ -253,21 +324,10 @@
 
   function railCard(r) {
     const cls = r.kind.cls || 'rail__no--g';
-    const notes = r.note
-      ? r.note
-          .split(/[，,]/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
 
-    const noteTags = notes.map((n) => {
-      let c = 'tag--neutral';
-      if (/改签/.test(n)) c = 'tag--amber';
-      else if (/候补/.test(n)) c = 'tag--rail';
-      else if (/静音/.test(n)) c = 'tag--rail';
-      return `<span class="tag ${c}">${esc(n)}</span>`;
-    });
-
+    // 2026-10 手机重设计：备注（含票价/时刻/改签说明）改为一行脚注。
+    // 老设计把备注按逗号拆成 tag 芯片，长备注（如改签说明带票价时刻）
+    // 在 390px 下会碎成三四行芯片，反而难读。
     return `<article class="rail">
   <div class="rail__badge">
     <div class="rail__no ${cls === 'rail__no--g' ? '' : cls}">${esc(r.train)}</div>
@@ -278,13 +338,10 @@
       <span class="rail__station">${esc(r.from)}</span>
       <span class="rail__arrow">${icon.arrow}</span>
       <span class="rail__station">${esc(r.to)}</span>
+      <span class="rail__date">${r.date ? `${r.date.text} ${r.date.weekday}` : r.dateRaw}</span>
     </div>
-    <div class="rail__meta">
-      <span>${r.date ? `${r.date.text} ${r.date.weekday}` : r.dateRaw}</span>
-      <i class="dot"></i>
-      <span>${esc(r.seat)}</span>
-    </div>
-    ${noteTags.length ? `<div class="rail__notes">${noteTags.join('')}</div>` : ''}
+    <div class="rail__meta"><span>${esc(r.seat)}</span></div>
+    ${r.note ? `<div class="rail__note">${esc(r.note)}</div>` : ''}
   </div>
 </article>`;
   }
@@ -315,16 +372,16 @@
       .join('');
   }
 
-  function chipRow(label, options, active, key) {
-    return `<div class="chips__label">${esc(label)}</div>
-<div class="chips">${options
+  /** 只出按钮；维度分隔由调用方用 .chips__sep 竖线表示，label 行退役（省两行竖向空间） */
+  function chipButtons(options, active, key) {
+    return options
       .map(
         (o) =>
           `<button class="chip${o.value === active ? ' is-active' : ''}" data-chip="${key}" data-value="${esc(
             o.value,
           )}">${esc(o.label)}</button>`,
       )
-      .join('')}</div>`;
+      .join('');
   }
 
   /** 「统计 | 列表 | 航迹图」分段切换。views 传入要展示哪几段。
@@ -339,7 +396,9 @@
       ${views
         .map(
           (v) =>
-            `<button class="vtoggle__btn${active === v ? ' is-active' : ''}" data-tview="${kind}:${v}">${label[v]}</button>`,
+            `<button class="vtoggle__btn${active === v ? ' is-active' : ''}" role="tab" aria-selected="${
+              active === v
+            }" data-tview="${kind}:${v}">${label[v]}</button>`,
         )
         .join('')}
     </div>`;
@@ -512,6 +571,12 @@
     <!-- 页面 h1 由 render() 注入 sr-only 版本；这里只是视觉主标题，降级为 p 避免一页两个 h1 -->
     <p class="hero__title">${esc(M.site.title)}</p>
     <div class="hero__sub">${esc(spanText)}</div>
+    <div class="hero__horizon">记录截至 ${esc(
+      [...flights.map((f) => f.dateRaw), ...rails.map((r) => r.dateRaw), ...tracks.map((t) => t.date)]
+        .filter(Boolean)
+        .sort()
+        .pop() || '—',
+    )}</div>
     <div class="hero__grid">
       <div class="hero__stat"><b>${overview.flightCount}</b><span>段航班</span></div>
       <div class="hero__stat"><b>${overview.railCount}</b><span>段铁路</span></div>
@@ -659,24 +724,21 @@
   <div class="listhead">
     ${viewToggle('flights', 'list')}
   </div>
-  <div class="filters">
-    ${chipRow(
-      '年份',
-      [{ value: 'all', label: '全部' }, ...flightYears.map((y) => ({ value: String(y), label: `${y}` }))],
+  <div class="controls">
+    <div class="searchrow"><input class="search" type="search" id="q-flight" data-q="flightQuery" aria-label="搜索航班" placeholder="搜航班号 / 城市 / 机场 / 机型 / 日期" value="${esc(state.flightQuery)}"></div>
+    <div class="chips">${chipButtons(
+      [{ value: 'all', label: '全部年份' }, ...flightYears.map((y) => ({ value: String(y), label: `${y}` }))],
       state.flightYear,
       'flightYear',
-    )}
-    ${chipRow(
-      '航空公司',
-      [{ value: 'all', label: '全部' }, ...airlineNames.map((a) => ({ value: a, label: a }))],
+    )}<span class="chips__sep" aria-hidden="true"></span>${chipButtons(
+      [{ value: 'all', label: '全部航司' }, ...airlineNames.map((a) => ({ value: a, label: a }))],
       state.flightAirline,
       'flightAirline',
-    )}
-    <div class="searchrow"><input class="search" type="search" id="q-flight" data-q="flightQuery" placeholder="搜航班号 / 城市 / 机场 / 机型 / 日期" value="${esc(state.flightQuery)}"></div>
+    )}</div>
   </div>
 
   <div class="section__head">
-    <h2 class="section__title">${list.length} 段航班</h2>
+    <h2 class="section__title" aria-live="polite">${list.length} 段航班</h2>
     <span class="section__hint">${U.formatNumber(Math.round(km))} km · ¥${U.formatNumber(fare)}</span>
   </div>
 
@@ -711,18 +773,17 @@
   <div class="listhead">
     ${viewToggle('rail', 'list')}
   </div>
-  <div class="filters">
-    ${chipRow(
-      '年份',
-      [{ value: 'all', label: '全部' }, ...railYears.map((y) => ({ value: String(y), label: `${y}` }))],
+  <div class="controls">
+    <div class="searchrow"><input class="search" type="search" id="q-rail" data-q="railQuery" aria-label="搜索铁路行程" placeholder="搜车次 / 车站 / 城市 / 备注" value="${esc(state.railQuery)}"></div>
+    <div class="chips">${chipButtons(
+      [{ value: 'all', label: '全部年份' }, ...railYears.map((y) => ({ value: String(y), label: `${y}` }))],
       state.railYear,
       'railYear',
-    )}
-    <div class="searchrow"><input class="search" type="search" id="q-rail" data-q="railQuery" placeholder="搜车次 / 车站 / 城市 / 备注" value="${esc(state.railQuery)}"></div>
+    )}</div>
   </div>
 
   <div class="section__head">
-    <h2 class="section__title">${list.length} 段行程</h2>
+    <h2 class="section__title" aria-live="polite">${list.length} 段行程</h2>
     <span class="section__hint">${[...seatKinds.entries()].map(([k, v]) => `${k} ${v}`).join(' · ')}</span>
   </div>
 
@@ -813,16 +874,16 @@
   <div class="listhead">
     ${viewToggle('tracks', 'list', ['stats', 'list'])}
   </div>
-  <div class="filters">
-    ${chipRow('类型', [
-      { value: 'all', label: '全部' },
+  <div class="controls">
+    <div class="searchrow"><input class="search" type="search" id="q-track" data-q="trackQuery" aria-label="搜索轨迹" placeholder="搜轨迹名 / 地区 / 日期" value="${esc(state.trackQuery)}"></div>
+    <div class="chips">${chipButtons([
+      { value: 'all', label: '全部类型' },
       { value: 'hike', label: '徒步' },
       { value: 'run', label: '越野跑' },
-    ], state.trackKind, 'trackKind')}
-    <div class="searchrow"><input class="search" type="search" id="q-track" data-q="trackQuery" placeholder="搜轨迹名 / 地区 / 日期" value="${esc(state.trackQuery)}"></div>
+    ], state.trackKind, 'trackKind')}</div>
   </div>
   <div class="section__head" style="margin-top:16px">
-    <h2 class="section__title">${tlist.length} 条轨迹</h2>
+    <h2 class="section__title" aria-live="polite">${tlist.length} 条轨迹</h2>
     <span class="section__hint">共 ${U.formatNumber(
       Math.round(tlist.reduce((s, t) => s + t.stats.distanceKm, 0)),
     )} 公里</span>
@@ -1003,12 +1064,20 @@
 
   function renderTabs(active) {
     return TABS.map(
-      (t) => `<a class="tabbar__btn${t.key === active ? ' is-active' : ''}" href="${t.hash}">
+      (t) =>
+        `<a class="tabbar__btn${t.key === active ? ' is-active' : ''}" href="${t.hash}"${
+          t.key === active ? ' aria-current="page"' : ''
+        }>
       ${tabIcon[t.key]}<span>${t.label}</span></a>`,
     ).join('');
   }
 
-  function render() {
+  /**
+   * reason='keep' 表示「同一页内收窄/刷新结果」（搜索、chip、后台数据更新），
+   * 保留滚动位置；其余（路由/tab/子视图切换、首渲）回顶部。
+   * 修的是老 bug：搜索每敲一个字都 scrollTo(0)，滚到 2019 年再搜直接弹回页顶。
+   */
+  function render(reason) {
     const route = currentRoute();
     const view = document.getElementById('view');
 
@@ -1017,7 +1086,28 @@
       const t0 = tracks.find((x) => x.id === route.trackId);
       if (t0 && !t0.paths) {
         view.innerHTML = '<div class="boot">正在加载轨迹几何…</div>';
-        ensureGeometry(t0).then(() => render());
+        ensureGeometry(t0).then(() => render('keep'));
+        return;
+      }
+    }
+
+    // F8：统计/地图模块没到位时先占位，注入完再渲染（同几何的占位模式）
+    if (!route.detail) {
+      const need =
+        route.tab === 'home'
+          ? 'routemap'
+          : (route.tab === 'flights'
+              ? state.flightView
+              : route.tab === 'rail'
+                ? state.railView
+                : state.trackView) === 'stats'
+            ? 'stats'
+            : (route.tab === 'flights' ? state.flightView : route.tab === 'rail' ? state.railView : state.trackView) === 'map'
+              ? 'routemap'
+              : null;
+      if (need && !(window.MYWORLD && window.MYWORLD[need])) {
+        view.innerHTML = '<div class="boot">正在加载模块…</div>';
+        ensureMod(need).then(() => render('keep'));
         return;
       }
     }
@@ -1062,6 +1152,12 @@
 
     const title = pageTitle;
     document.getElementById('topTitle').textContent = title;
+    // F4：浏览器标题跟随路由，多标签/书签/分享才分得清页面
+    document.title = route.detail
+      ? `${pageTitle} · MyWorld`
+      : route.tab === 'home'
+        ? 'MyWorld · 行程记录'
+        : `${pageTitle} · MyWorld`;
 
     const back = document.getElementById('back');
     back.style.display = route.detail ? 'flex' : 'none';
@@ -1071,7 +1167,7 @@
     else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
     else if (route.tab === 'home') mountCityMap();
 
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (reason !== 'keep') window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   /* ------------------------------------------------------------------ */
@@ -1193,14 +1289,14 @@
       if (kind === 'flights') state.flightView = mode;
       else if (kind === 'rail') state.railView = mode;
       else state.trackView = mode;
-      render();
+      render(); // 子视图切换 = 换页，回顶部
       return;
     }
 
     const chip = e.target.closest('[data-chip]');
     if (chip) {
       state[chip.dataset.chip] = chip.dataset.value;
-      render();
+      render('keep'); // 筛选是「同一页收窄结果」，保留滚动
       return;
     }
 
@@ -1254,7 +1350,7 @@
   function applySearchQuery(inp) {
     const caret = inp.selectionStart;
     state[inp.dataset.q] = inp.value;
-    render();
+    render('keep'); // 搜索保留滚动位置
     const again = document.getElementById(inp.id);
     if (again) {
       again.focus();
@@ -1283,6 +1379,55 @@
 
   window.addEventListener('hashchange', render);
 
+  // F10：断网/上线切换提示（与 F2 横幅复用）
+  window.addEventListener('offline', () => setNetBar());
+  window.addEventListener('online', () => {
+    // 上线后主动重取一次，成功则撤横幅
+    loadRemote().then((ok) => {
+      if (ok) {
+        initDatas();
+        render('keep');
+      }
+      setNetBar();
+    });
+  });
+
+  // F3：回到页面时若距上次拉取 >60s 则静默重取（你刚上传完切回来能立刻看到）
+  function refetchIfStale() {
+    if (!lastFetchAt || Date.now() - lastFetchAt < 60000) return;
+    loadRemote().then((ok) => {
+      if (ok) {
+        initDatas();
+        render('keep');
+      }
+      setNetBar();
+    });
+  }
+  window.addEventListener('focus', refetchIfStale);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refetchIfStale();
+  });
+
+  // F3：SW 后台再验证发现数据变了 / 只有缓存可用时通知页面
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d.type === 'api-cache') {
+        dataState = 'stale';
+        setNetBar();
+      } else if (d.type === 'api-updated') {
+        loadRemote().then((ok) => {
+          if (ok) {
+            initDatas();
+            dataState = navigator.onLine === false ? 'stale' : 'ok';
+            setNetBar();
+            render('keep');
+          }
+        });
+      }
+    });
+  }
+
   async function boot() {
     const el = document.getElementById('boot');
     try {
@@ -1290,6 +1435,7 @@
       initDatas();
       render();
       if (el && el.parentNode) el.remove();
+      setNetBar();
     } catch (err) {
       console.error(err);
       if (el) {

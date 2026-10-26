@@ -22,6 +22,9 @@
       content="个人行程记录：100 段航班、54 段铁路与徒步轨迹。纯静态、无后端、无追踪。"
     />
 
+    <!-- F5：概览城市地图几乎每会话都用，提前握手省 DNS+TLS -->
+    <link rel="preconnect" href="https://map.qq.com" crossorigin />
+    <link rel="dns-prefetch" href="https://map.qq.com" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <!-- iOS 不认 SVG 图标，之前加到主屏幕是空白；换成 180 PNG -->
     <link rel="apple-touch-icon" href="assets/img/icon-180.png" />
@@ -30,7 +33,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MyWorld" />
 
-    <link rel="stylesheet" href="assets/css/style.css?v=328b6cb7" />
+    <link rel="stylesheet" href="assets/css/style.css?v=77b1a438" />
   </head>
 
   <body>
@@ -65,14 +68,13 @@
       这样做是为了让 index.html 直接用 file:// 双击打开也能跑——
       ES module 在 file:// 下会被 CORS 拦掉，那样本地预览就没法用了。
     -->
-    <script defer src="assets/data/site.js?v=328b6cb7"></script>
-    <script defer src="assets/data/airports.js?v=328b6cb7"></script>
-    <script defer src="assets/js/data-utils.js?v=328b6cb7"></script>
-    <script defer src="assets/js/stats.js?v=328b6cb7"></script>
-    <script defer src="assets/js/geo.js?v=328b6cb7"></script>
-    <script defer src="assets/js/raw.js?v=328b6cb7"></script>
-    <script defer src="assets/js/map.js?v=328b6cb7"></script>
-    <script defer src="assets/js/routemap.js?v=328b6cb7"></script>
-    <script defer src="assets/js/app.js?v=328b6cb7"></script>
+    <script defer src="assets/data/site.js?v=77b1a438"></script>
+    <script defer src="assets/data/airports.js?v=77b1a438"></script>
+    <script defer src="assets/js/data-utils.js?v=77b1a438"></script>
+    <script defer src="assets/js/geo.js?v=77b1a438"></script>
+    <script defer src="assets/js/raw.js?v=77b1a438"></script>
+    <script defer src="assets/js/map.js?v=77b1a438"></script>
+    <!-- stats.js / routemap.js 改按需注入（app.js ensureMod），首屏省 18.4 KB gz -->
+    <script defer src="assets/js/app.js?v=77b1a438"></script>
   </body>
 </html>
