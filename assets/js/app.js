@@ -1306,7 +1306,7 @@
    * 保留滚动位置；其余（路由/tab/子视图切换、首渲）回顶部。
    * 修的是老 bug：搜索每敲一个字都 scrollTo(0)，滚到 2019 年再搜直接弹回页顶。
    */
-  function render(reason) {
+  function render(reason, afterSwap) {
     const route = currentRoute();
     const view = document.getElementById('view');
 
@@ -1375,8 +1375,26 @@
     const canVT =
       typeof document.startViewTransition === 'function' &&
       !matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (canVT) document.startViewTransition(() => { view.innerHTML = pageHtml; });
-    else view.innerHTML = pageHtml;
+    // R3 修正：View Transitions 的回调是**异步**的（独立 task 里跑），
+    // 所有「读新 DOM」的事必须进 swap——老写法在 startViewTransition() 后同步
+    // 挂地图，那时 #cityMapHost/#mapHost 还不存在，mount 静默 return，
+    // 表现为所有地图消失；搜索光标恢复同样拿到 null。
+    const mountMaps = () => {
+      if (route.detail) mountTrackMap(route.trackId);
+      else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
+      else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
+      else if (route.tab === 'home' && !route.sub) mountCityMap();
+    };
+    const swap = () => {
+      view.innerHTML = pageHtml;
+      mountMaps();
+      if (afterSwap) afterSwap();
+    };
+    if (canVT) {
+      // 连续切页会让上一个 transition 被 skip，其 finished 以 AbortError reject，
+      // 不接住就是控制台未捕获噪音
+      document.startViewTransition(swap).finished.catch(() => {});
+    } else swap();
     document.getElementById('tabs').innerHTML = renderTabs(route.tab);
 
     // 航迹图占满一屏，列表页那条「给底部标签栏留空间」的 padding 就多余了
@@ -1407,11 +1425,6 @@
 
     const back = document.getElementById('back');
     back.style.display = route.detail || route.sub ? 'flex' : 'none';
-
-    if (route.detail) mountTrackMap(route.trackId);
-    else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
-    else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
-    else if (route.tab === 'home' && !route.sub) mountCityMap();
 
     if (reason !== 'keep') window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -1596,12 +1609,14 @@
   function applySearchQuery(inp) {
     const caret = inp.selectionStart;
     state[inp.dataset.q] = inp.value;
-    render('keep'); // 搜索保留滚动位置
-    const again = document.getElementById(inp.id);
-    if (again) {
-      again.focus();
-      try { again.setSelectionRange(caret, caret); } catch (_) { /* 非文本输入忽略 */ }
-    }
+    // 搜索保留滚动位置；光标恢复必须等 swap 完成（VT 路径下 DOM 是异步换的）
+    render('keep', () => {
+      const again = document.getElementById(inp.id);
+      if (again) {
+        again.focus();
+        try { again.setSelectionRange(caret, caret); } catch (_) { /* 非文本输入忽略 */ }
+      }
+    });
   }
 
   document.addEventListener('compositionstart', (e) => {
