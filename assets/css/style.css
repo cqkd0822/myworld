@@ -2101,8 +2101,8 @@ a {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  height: 92px;
-  padding-top: 6px;
+  height: 108px;
+  padding-top: 4px;
 }
 
 .st-hours__col {
@@ -2737,6 +2737,7 @@ body.map-expanded {
 .hero__stat b,
 .stat__value,
 .bars__n,
+.st-hours__n,
 .voided__no,
 .voided__why,
 .st-kpi__num,
@@ -2767,9 +2768,30 @@ body.map-expanded {
   transform: translateY(-0.5px);
 }
 
-/* 小时轴标签：11px 放不下 24 列 → 隔列隐藏，刻度仍对齐 */
-.st-hours__h:nth-child(even) {
+/* 小时轴 24 列太挤 → 隔「列」隐藏标签；月度图 12 列全显示。
+   老写法 .st-hours__h:nth-child(even) 误伤了所有图（标签是列内第 2 子，全偶） */
+.st-hours__col:nth-child(even) .st-hours__h {
   visibility: hidden;
+}
+.st-hours--month .st-hours__col:nth-child(even) .st-hours__h {
+  visibility: visible;
+}
+
+/* 柱顶可见计数 + well 承托百分比高度 */
+.st-hours__n {
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: center;
+}
+.st-hours__well {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 /* R3 骨架屏：行高/块高全是 4 的倍数 */

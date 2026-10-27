@@ -137,8 +137,11 @@
       .map((v, i) => {
         const hp = Math.max(v ? 6 : 2, Math.round((v / max) * 100));
         const isPeak = i === peak && v > 0;
+        // 可见计数行（老设计只有 tooltip，轴标签又被隔列隐藏时整图就没数字了）；
+        // 柱体包一层 well，百分比高度相对 well 算，给计数行让位
         return `<div class="st-hours__col" title="${esc(labels[i])} · ${v}">
-      <div class="st-hours__bar${isPeak ? ' is-peak' : ''}" style="height:${hp}%"></div>
+      <span class="st-hours__n">${v || ''}</span>
+      <div class="st-hours__well"><div class="st-hours__bar${isPeak ? ' is-peak' : ''}" style="height:${hp}%"></div></div>
       <span class="st-hours__h${isPeak ? ' is-peak' : ''}">${esc(labels[i])}</span>
     </div>`;
       })
