@@ -114,12 +114,25 @@ export default {
       }
 
       if (path === '/api/rail') {
-        const { results } = await env.DB.prepare(
-          'SELECT id,date,train,from_station,to_station,seat,note FROM rail ORDER BY id',
-        ).all();
+        // dep_time / arr_time 由 006 migration 加入。线上若先上了代码、还没跑
+        // migration，这条查询会报「no such column」——退回旧列而不是 500，
+        // 否则整个铁路页会被一条 DDL 拖空。
+        let results;
+        try {
+          ({ results } = await env.DB.prepare(
+            'SELECT id,date,train,from_station,to_station,seat,note,dep_time,arr_time FROM rail ORDER BY id',
+          ).all());
+        } catch (e) {
+          ({ results } = await env.DB.prepare(
+            'SELECT id,date,train,from_station,to_station,seat,note FROM rail ORDER BY id',
+          ).all());
+        }
         return jsonWithEtag(
           request,
-          results.map((x) => [x.id, x.date, x.train, x.from_station, x.to_station, x.seat, x.note]),
+          results.map((x) => [
+            x.id, x.date, x.train, x.from_station, x.to_station, x.seat, x.note,
+            x.dep_time ?? null, x.arr_time ?? null,
+          ]),
         );
       }
 

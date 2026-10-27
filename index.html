@@ -19,7 +19,7 @@
     <meta property="og:title" content="MyWorld · 行程记录" />
     <meta
       property="og:description"
-      content="个人行程记录：100 段航班、54 段铁路与徒步轨迹。纯静态、无后端、无追踪。"
+      content="个人行程记录：航班、铁路与徒步轨迹。数据真源为 Cloudflare D1，无追踪。"
     />
 
     <!-- F5：概览城市地图几乎每会话都用，提前握手省 DNS+TLS -->
@@ -33,7 +33,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MyWorld" />
 
-    <link rel="stylesheet" href="assets/css/style.css?v=3c798704" />
+    <link rel="stylesheet" href="assets/css/style.css?v=ee9e3ebb" />
   </head>
 
   <body>
@@ -71,13 +71,13 @@
       这样做是为了让 index.html 直接用 file:// 双击打开也能跑——
       ES module 在 file:// 下会被 CORS 拦掉，那样本地预览就没法用了。
     -->
-    <script defer src="assets/data/site.js?v=3c798704"></script>
-    <script defer src="assets/data/airports.js?v=3c798704"></script>
-    <script defer src="assets/js/data-utils.js?v=3c798704"></script>
-    <script defer src="assets/js/geo.js?v=3c798704"></script>
-    <script defer src="assets/js/raw.js?v=3c798704"></script>
-    <script defer src="assets/js/map.js?v=3c798704"></script>
+    <script defer src="assets/data/site.js?v=ee9e3ebb"></script>
+    <script defer src="assets/data/airports.js?v=ee9e3ebb"></script>
+    <script defer src="assets/js/data-utils.js?v=ee9e3ebb"></script>
+    <script defer src="assets/js/geo.js?v=ee9e3ebb"></script>
+    <script defer src="assets/js/raw.js?v=ee9e3ebb"></script>
+    <script defer src="assets/js/map.js?v=ee9e3ebb"></script>
     <!-- stats.js / routemap.js 改按需注入（app.js ensureMod），首屏省 18.4 KB gz -->
-    <script defer src="assets/js/app.js?v=3c798704"></script>
+    <script defer src="assets/js/app.js?v=ee9e3ebb"></script>
   </body>
 </html>

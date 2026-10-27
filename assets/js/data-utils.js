@@ -283,9 +283,12 @@
     G: { label: '高铁', cls: 'rail__no--g' },
     D: { label: '动车', cls: 'rail__no--d' },
     C: { label: '城际', cls: 'rail__no--c' },
+    S: { label: '市郊', cls: 'rail__no--ktz' },
     Z: { label: '直达', cls: 'rail__no--ktz' },
     T: { label: '特快', cls: 'rail__no--ktz' },
     K: { label: '快速', cls: 'rail__no--ktz' },
+    L: { label: '临客', cls: 'rail__no--ktz' },
+    Y: { label: '旅游', cls: 'rail__no--ktz' },
   };
 
   /** 座位串是混合语义，这里只做粗分类，用于统计和图标 */
@@ -304,7 +307,7 @@
 
     return rows
       .map((r) => {
-        const [id, dateRaw, train, from, to, seat, note] = r;
+        const [id, dateRaw, train, from, to, seat, note, depRaw, arrRaw] = r;
         const prefix = String(train || '').charAt(0).toUpperCase();
         const fromCity = parseStationName(from).city;
         const toCity = parseStationName(to).city;
@@ -324,9 +327,151 @@
           seat,
           seatKind: seatKind(seat),
           note: note || '',
+          /* 时刻可空。空就是「没记录」，不要当成 00:00 */
+          dep: parseClock(depRaw),
+          arr: parseClock(arrRaw),
         };
       })
       .sort((a, b) => (a.dateRaw < b.dateRaw ? 1 : a.dateRaw > b.dateRaw ? -1 : b.id - a.id));
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 换乘归并                                                            */
+  /* ------------------------------------------------------------------ */
+
+  /** 中转窗口：前段到达 → 后段出发，60 分钟内算同一次出行 */
+  const TRANSFER_WINDOW_MIN = 60;
+
+  /** 日期 → 天序数，用来算跨零点的绝对分钟 */
+  function dayOrdinal(d) {
+    return d ? Math.round(Date.UTC(d.year, d.month - 1, d.day) / 86400000) : null;
+  }
+
+  /** 时刻 → 绝对分钟（含跨日偏移）。日期或时刻缺一就没有意义，返回 null。 */
+  function clockAbs(date, clock) {
+    const day = dayOrdinal(date);
+    if (day == null || !clock) return null;
+    return day * 1440 + clock.minutes + (clock.dayOffset || 0) * 1440;
+  }
+
+  /**
+   * a 能不能接上 b，返回 link 描述或 null。
+   *
+   * 三种情形：
+   *   1. 同车次、且前段到达站 == 后段出发站 → 分段购票，不是换乘；
+   *   2. 两端都有时刻 → 严格按 0~60 分钟判定（跨零点由绝对分钟自然处理），
+   *      同城异站也认——有时刻就是事实；
+   *   3. 缺时刻 → 只推定「同日 + 同城 + 同站」；异站不推定，因为分不清
+   *      「赶去另一个站」和「在那座城玩到晚上」（T172/D583 就是后者）。
+   */
+  function railLink(a, b) {
+    if (!a || !b || a === b) return null;
+    if (!a.toCity || a.toCity !== b.fromCity) return null;
+
+    const sameStation = a.to === b.from;
+    const sameTrain = String(a.train) === String(b.train) && sameStation;
+
+    const arrAbs = clockAbs(a.date, a.arr);
+    const depAbs = clockAbs(b.date, b.dep);
+
+    if (arrAbs != null && depAbs != null) {
+      const gap = depAbs - arrAbs;
+      // gap < 0：后段在时间上早于前段，说明录入有误，不连
+      if (gap < 0 || gap > TRANSFER_WINDOW_MIN) return null;
+      return { gap, sameStation, sameTrain, precise: true };
+    }
+
+    // 缺时刻：只有同站接续才推定（同车次必然同站，已在 sameTrain 里）
+    if (!sameStation) return null;
+    const da = dayOrdinal(a.date);
+    const db = dayOrdinal(b.date);
+    if (da == null || db == null || da !== db) return null;
+    return { gap: null, sameStation, sameTrain, precise: false };
+  }
+
+  /**
+   * 铁路段 → 出行（trip）。
+   *
+   * 不能「按顺序扫相邻两条」：id 是录入顺序，不保证是行程顺序
+   * （2025-11-14 的 T172 比它前面的 D583 晚录入，实际却后发）。
+   * 这里建图做一对一贪心匹配：每段最多一个前驱、一个后继，
+   * 天然排除「深圳北→广州东 / 深圳北→广州南」这种同起点替代票。
+   */
+  function buildRailTrips(list) {
+    const items = list.slice();
+    const edges = [];
+
+    for (const a of items) {
+      for (const b of items) {
+        const link = railLink(a, b);
+        if (!link) continue;
+        // 有时刻的优先（信息确定），再按间隔短的优先，最后按 id 稳定排序
+        edges.push({ a, b, link, score: link.precise ? link.gap : 10000 });
+      }
+    }
+    edges.sort((x, y) => x.score - y.score || x.a.id - y.a.id || x.b.id - y.b.id);
+
+    const next = new Map(); // a.id → { b, link }
+    const prev = new Map(); // b.id → a.id
+    for (const e of edges) {
+      if (next.has(e.a.id) || prev.has(e.b.id)) continue;
+      next.set(e.a.id, { b: e.b, link: e.link });
+      prev.set(e.b.id, e.a.id);
+    }
+
+    // 链头 = 没有前驱的段，顺着 next 走到底就是一次出行
+    const ordered = items.slice().sort((x, y) => {
+      const kx = (dayOrdinal(x.date) ?? 9e9) * 100000 + (x.dep ? x.dep.minutes : 720) * 100 + x.id;
+      const ky = (dayOrdinal(y.date) ?? 9e9) * 100000 + (y.dep ? y.dep.minutes : 720) * 100 + y.id;
+      return kx - ky;
+    });
+
+    const trips = [];
+    const seen = new Set();
+    for (const head of ordered) {
+      if (prev.has(head.id) || seen.has(head.id)) continue;
+      const legs = [];
+      const links = [];
+      let cur = head;
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        legs.push(cur);
+        const nx = next.get(cur.id);
+        if (!nx) break;
+        links.push(nx.link);
+        cur = nx.b;
+      }
+      trips.push(makeTrip(legs, links));
+    }
+
+    // 理论上没有环；真出现了也不能把段丢掉
+    for (const r of items) if (!seen.has(r.id)) trips.push(makeTrip([r], []));
+
+    trips.sort((a, b) =>
+      a.dateRaw < b.dateRaw ? 1 : a.dateRaw > b.dateRaw ? -1 : a.legs[0].id - b.legs[0].id,
+    );
+    return trips;
+  }
+
+  function makeTrip(legs, links) {
+    const first = legs[0];
+    const last = legs[legs.length - 1];
+    return {
+      date: first.date,
+      dateRaw: first.dateRaw,
+      legs,
+      links,
+      /* 主行程：首段起点 → 末段终点 */
+      fromStation: first.from,
+      toStation: last.to,
+      fromCity: first.fromCity,
+      toCity: last.toCity,
+      /* 同车分段买票，不算一次换乘 */
+      transfers: links.filter((l) => !l.sameTrain).length,
+      /* 只要有一处靠推定，整卡就标「时刻未记录」 */
+      precise: links.length > 0 && links.every((l) => l.precise),
+      waitMin: links.reduce((s, l) => s + (l.gap || 0), 0),
+    };
   }
 
   function buildVoided() {
@@ -344,12 +489,23 @@
   /* 汇总统计                                                            */
   /* ------------------------------------------------------------------ */
 
-  /** 轨迹 → 城市：先按名字最长前缀匹配城市词典，再退回 region 的「省 · 市」。 */
+  /**
+   * 轨迹 → 城市：先按名字最长前缀匹配城市词典，再退回 region 的「省 · 市」。
+   *
+   * 有些轨迹名字和 region 都不是城市名（徽杭古道跨绩溪→杭州、武功山是景区名），
+   * 这里单独指认；绩溪属宣城，武功山这段是萍乡进宜春出，记常规起点萍乡。
+   */
+  const TRACK_CITY_ALIAS = {
+    徽杭古道: '宣城',
+    武功山: '萍乡',
+  };
+
   function trackCity(t) {
     const parts = String(t.region || '').split('·').map((x) => x.trim());
     for (const src of [t.name, parts[1], parts[0]]) {
       const v = String(src || '');
       for (const key of CITY_KEYS) if (v.startsWith(key)) return key;
+      for (const key of Object.keys(TRACK_CITY_ALIAS)) if (v.includes(key)) return TRACK_CITY_ALIAS[key];
     }
     return null;
   }
@@ -393,7 +549,6 @@
     const withDelay = flights.filter((f) => f.delay != null);
     // 准点率全站统一 A15 口径：到达不晚于计划 +15 分钟（民航业通用）
     const onTime = withDelay.filter((f) => f.delay <= 15).length;
-
     const stationCount = new Set();
     rails.forEach((r) => {
       stationCount.add(r.from);
@@ -427,14 +582,28 @@
       onTime,
       delayed: withDelay.length - onTime,
       onTimeRate: withDelay.length ? onTime / withDelay.length : 0,
+      delayKnown: withDelay.length,
       stationCount: stationCount.size,
       maxDelay: flights.reduce((m, f) => Math.max(m, f.delay || 0), 0),
       longest: flights
         .filter((f) => f.distanceKm)
         .sort((a, b) => b.distanceKm - a.distanceKm)[0],
       pricey: fareList.sort((a, b) => b.price - a.price)[0],
-      firstDate: flights.length ? flights[flights.length - 1].dateRaw : null,
-      lastDate: flights.length ? flights[0].dateRaw : null,
+      firstDate: [
+        ...flights.map((f) => f.dateRaw),
+        ...rails.map((r) => r.dateRaw),
+        ...tracks.map((t) => t.date),
+      ]
+        .filter(Boolean)
+        .sort()[0] || null,
+      lastDate: [
+        ...flights.map((f) => f.dateRaw),
+        ...rails.map((r) => r.dateRaw),
+        ...tracks.map((t) => t.date),
+      ]
+        .filter(Boolean)
+        .sort()
+        .pop() || null,
       flightsByYear,
       railsByYear,
       years,
@@ -466,6 +635,7 @@
     formatDateTime,
     buildFlights,
     buildRail,
+    buildRailTrips,
     buildVoided,
     delayTag,
     seatKind,

@@ -1,9 +1,8 @@
 /**
  * 应用主逻辑 —— 路由 + 四个视图的渲染。
  *
- * 没有框架，也不需要：数据是静态的（100 段航班 + 54 段铁路 + 63 条轨迹，
- * 全量序列化后约 410 KB），页面用模板字符串拼出来就行。
- * 这样整个站零依赖、零构建，鼠标双击 index.html 就能看。
+ * 没有框架，也不需要：数据从 /api/* 拉原始行（D1 为真源），视图用模板
+ * 字符串拼出来，所有统计都在浏览器现算。
  *
  * 路由用 hash（#/flights 这种）。选 hash 而不是 history API，是因为
  * GitHub Pages 这类静态托管没有服务端重写，history 路由一刷新就 404。
@@ -26,8 +25,8 @@
         '<b style="color:#e5484d">页面没能启动</b>' +
         '<div style="margin-top:8px;font-size:13px">行程数据脚本没有加载完成。</div>' +
         '<div style="margin-top:10px;font-size:12px;color:#98a2b3">' +
-        '请确认 assets/data/ 下的 5 个文件与 assets/js/data-utils.js 都在，' +
-        '并且 <script> 标签的顺序没被打乱（顺序即依赖顺序）。' +
+        '数据真源是 D1（/api/*），请通过 <code>npx wrangler dev</code> 或' +
+        '<code>node _preview/serve.mjs</code> 访问，不要直接双击 index.html。' +
         '</div></div>';
     }
     return;
@@ -201,6 +200,7 @@
     railQuery: '',
     trackQuery: '',
     trackKind: 'all',
+    cityQuery: '',
     // 「统计 | 列表 | 航迹图」三种视图。默认停在统计——打开一个 tab
     // 先看到成果，再往下翻明细。切到别的 tab 再回来，状态不会被打回原形。
     flightView: 'stats',
@@ -227,6 +227,10 @@
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>',
     pin:
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="11" r="2.4"/></svg>',
+    expand:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+    shrink:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>',
   };
 
   /** kind → [列表标签, tag 样式]。race 是完赛的比赛——全是越野跑，直接标越野跑 */
@@ -320,6 +324,68 @@
   /** meta 里已经带了 HTML（price 那个 span），只对纯文本项转义 */
   function esc0(s) {
     return /^</.test(s) ? s : esc(s);
+  }
+
+  /** 站名去尾缀「站」，只用于行程摘要那种一字千金的场合 */
+  function shortStation(s) {
+    return esc(String(s || '').replace(/站$/, ''));
+  }
+
+  /**
+   * 多段合一的行程卡。
+   *
+   * 一次出行里可能有 2~3 段车，单段卡一张一张列出来，同一趟旅程会被
+   * 拆成三张卡，看不出「这是从汉口到杭州西的一次行程」。
+   * 这里把段压成竖向时间轴，段间插一行换乘说明。
+   */
+  function tripCard(t) {
+    const badge =
+      t.transfers > 0 ? `${t.legs.length} 段 · 换乘 ${t.transfers} 次` : `${t.legs.length} 段 · 同车`;
+
+    const rows = [];
+    t.legs.forEach((r, i) => {
+      const cls = r.kind.cls || 'rail__no--g';
+      const meta = [r.seat && r.seat !== '—' ? r.seat : '', r.note].filter(Boolean).join(' · ');
+      const times =
+        r.dep || r.arr
+          ? `<div class="trip__times">
+        <span>${r.dep ? r.dep.text : '--:--'}</span>
+        <i></i>
+        <span>${r.arr ? r.arr.text + (r.arr.dayOffset ? '<sup>+1</sup>' : '') : '--:--'}</span>
+      </div>`
+          : '';
+
+      rows.push(`<li class="trip__leg">
+      <div class="rail__no ${cls === 'rail__no--g' ? '' : cls}">${esc(r.train)}</div>
+      <div class="trip__leg-main">
+        <div class="trip__stops"><span>${esc(r.from)}</span><i>${icon.arrow}</i><span>${esc(r.to)}</span></div>
+        ${meta ? `<div class="trip__leg-meta">${esc(meta)}</div>` : ''}
+      </div>
+      ${times}
+    </li>`);
+
+      const link = t.links[i];
+      if (!link) return;
+      const where = link.sameTrain
+        ? '同车续程 · 分段购票'
+        : link.sameStation
+          ? `${esc(r.to)} 同站换乘`
+          : `${esc(r.to)} → ${esc(t.legs[i + 1].from)} 换站`;
+      const wait = link.sameTrain ? '' : link.precise ? `等 ${link.gap} 分` : '时刻未记录';
+      rows.push(`<li class="trip__link">
+      <span class="trip__link-text">${where}</span>
+      ${wait ? `<span class="trip__link-wait${link.precise ? '' : ' trip__link-wait--na'}">${wait}</span>` : ''}
+    </li>`);
+    });
+
+    return `<article class="rail rail--trip">
+  <div class="trip__head">
+    <span class="trip__date">${t.date ? `${t.date.text} ${t.date.weekday}` : t.dateRaw}</span>
+    <span class="trip__badge">${badge}</span>
+  </div>
+  <div class="trip__summary">${shortStation(t.fromStation)}<i>${icon.arrow}</i>${shortStation(t.toStation)}</div>
+  <ol class="trip__legs">${rows.join('')}</ol>
+</article>`;
   }
 
   function railCard(r) {
@@ -480,7 +546,66 @@
   function mountCityMap() {
     const host = document.getElementById('cityMapHost');
     if (!host) return;
-    M.routemap.renderCityMap(host, overview.citiesAll, { accent: '#ffc247' });
+    M.routemap.renderCityMap(host, overview.citiesAll);
+    addMapExpandBtn(host);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 地图横屏展开                                                        */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * 三类地图宿主（首页城市图 / 航迹图·线路图 / 足迹详情）共用的展开按钮。
+   *
+   * 不用 CSS rotate 硬转：转了之后腾讯 GL 的触摸坐标不会跟着映射，拖拽会乱。
+   * 路线是——能全屏就全屏，全屏后尝试锁横屏（Android Chrome 支持，需要
+   * fullscreen 前提）；iOS 没有这套 API，退化为全视口覆盖层，提示用户
+   * 自己旋转手机。
+   */
+  function addMapExpandBtn(host) {
+    if (!host || host.querySelector('.map-expand')) return;
+    const btn = document.createElement('button');
+    btn.className = 'map-expand';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', '横屏展开地图');
+    btn.innerHTML = icon.expand;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMapExpand(host, btn);
+    });
+    host.appendChild(btn);
+  }
+
+  function toggleMapExpand(host, btn) {
+    const on = host.classList.toggle('is-expanded');
+    document.body.classList.toggle('map-expanded', on);
+    btn.innerHTML = on ? icon.shrink : icon.expand;
+    btn.setAttribute('aria-label', on ? '收起地图' : '横屏展开地图');
+
+    if (on) {
+      const df = document.documentElement;
+      const req = df.requestFullscreen || df.webkitRequestFullscreen;
+      if (req) {
+        Promise.resolve()
+          .then(() => req.call(df))
+          .then(() => {
+            const lock = screen.orientation && screen.orientation.lock;
+            return lock ? lock.call(screen.orientation, 'landscape') : null;
+          })
+          .catch(() => {
+            /* iOS / 桌面不支持：is-expanded 覆盖层已经够用 */
+          });
+      }
+    } else {
+      if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    // 容器尺寸变了，捅一下 resize 让 GL 重算画布；transition 结束后再补一刀
+    window.dispatchEvent(new Event('resize'));
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 350);
   }
 
   function mountRouteMap(kind) {
@@ -510,18 +635,94 @@
           : { items: list, stats: railStats(list) };
       },
     });
+    addMapExpandBtn(host);
   }
 
   /* ------------------------------------------------------------------ */
   /* 视图：概览                                                          */
   /* ------------------------------------------------------------------ */
 
+  /* ------------------------------------------------------------------ */
+  /* 视图：游历城市明细（#/cities）                                       */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * 独立的二级页，不再是底部弹层：chips 只能横向翻一小段，长尾城市
+   * （到访 1–2 次的）根本翻不到；明细要能搜、能一行行核对。
+   * 顶栏的返回按钮由路由控制，直接分享 #/cities 也能打开。
+   */
+  function viewCities() {
+    const all = overview.citiesAll;
+    const q = state.cityQuery.trim().toLowerCase();
+    const prov = (c) => M.cityProvince[c] || '';
+    // 省份也进搜索：输「江西」能一次捞出萍乡/南昌/鹰潭/抚州/宜春/上饶
+    const rows = q
+      ? all.filter(
+          ([c]) => String(c).toLowerCase().includes(q) || prov(c).toLowerCase().includes(q),
+        )
+      : all;
+    // 排名按全量算：搜索后剩下的行仍显示它在总榜的名次，不会变成 1、2、3
+    const rank = new Map(all.map(([c], i) => [c, i + 1]));
+    const sum = all.reduce(
+      (a, [, , o]) => ({
+        f: a.f + (o.flight || 0),
+        r: a.r + (o.rail || 0),
+        t: a.t + (o.track || 0),
+      }),
+      { f: 0, r: 0, t: 0 },
+    );
+    // 省份去重计数，给统计条用
+    const provCount = new Set(all.map(([c]) => prov(c)).filter(Boolean)).size;
+
+    const list = rows
+      .map(([city, total, o]) => {
+        const p = prov(city);
+        return `<div class="cityrow">
+      <span class="cityrow__rank">${rank.get(city)}</span>
+      <span class="cityrow__place">${
+        p && p !== city ? `<i>${esc(p)}</i>` : ''
+      }${esc(city)}</span>
+      <span class="cityrow__n">${total} 次</span>
+      <span class="cityrow__src">
+        ${o.flight ? `<i class="src src--flight">飞 ${o.flight}</i>` : ''}
+        ${o.rail ? `<i class="src src--rail">铁 ${o.rail}</i>` : ''}
+        ${o.track ? `<i class="src src--track">徒 ${o.track}</i>` : ''}
+      </span>
+    </div>`;
+      })
+      .join('');
+
+    return `<div class="controls">
+    <div class="searchrow"><input class="search" type="search" id="q-city" data-q="cityQuery" aria-label="搜索城市或省份" placeholder="搜城市 / 省份" value="${esc(state.cityQuery)}"></div>
+  </div>
+
+  <div class="citysum">
+    <div><b>${all.length}</b><span>座城市</span></div>
+    <div><b>${sum.f}</b><span>飞行到访</span></div>
+    <div><b>${sum.r}</b><span>铁路到访</span></div>
+    <div><b>${sum.t}</b><span>足迹到访</span></div>
+  </div>
+
+  <div class="section__head">
+    <h2 class="section__title">${q ? `${rows.length} 个匹配` : '按到访次数'}</h2>
+    <span class="section__hint">${q ? `共 ${all.length} 座` : `${provCount} 个省级区划`}</span>
+  </div>
+
+  <div class="card citylist">${list || '<div class="empty">没有匹配的城市</div>'}</div>
+
+  <p class="citynote">飞行、铁路按<strong>每段的到达城市</strong>计（换乘经停也算一次到访）；足迹按轨迹所在城市计。三源合并后按次数降序，城市前的灰字是所属省级行政区。</p>`;
+  }
+
   function viewHome() {
+    // 跨度取三源（航班/铁路/轨迹）并集（firstDate/lastDate 已在 computeOverview
+    // 里改为三源）；年份段也从跨度推导，不再用 overview.years（那是航班+铁路
+    // 的并集，轨迹年份超出时会跟前面的日期自相矛盾）。
     const spanText =
       overview.firstDate && overview.lastDate
-        ? `${overview.firstDate} → ${overview.lastDate} · ${overview.years[0]}–${
-            overview.years[overview.years.length - 1]
-          } 年`
+        ? `${overview.firstDate} → ${overview.lastDate} · ${overview.firstDate.slice(
+            0,
+            4,
+          )}–${overview.lastDate.slice(0, 4)} 年`
         : '';
 
     // 逐年柱状图：一段一年，蓝色是航班、青色是铁路，堆叠成出行总量
@@ -540,7 +741,7 @@
         const h = (v) => `${Math.round((v / maxTotal) * 100)}%`;
         return `<div class="bars__col" title="${y} 年：航班 ${f} 段，铁路 ${r} 段">
   <span class="bars__n">${total || ''}</span>
-  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:0;height:100%">
+  <div style="width:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:0;height:100%">
     <div class="bars__bar bars__bar--rail" style="${r ? `height:${h(r)}` : 'display:none'}"></div>
     <div class="bars__bar" style="${f ? `height:${h(f)}` : 'display:none'}"></div>
   </div>
@@ -613,7 +814,7 @@
       <div class="stat">
         <div class="stat__label">准点率</div>
         <div class="stat__value">${Math.round(overview.onTimeRate * 100)}<small>%</small></div>
-        <div class="stat__foot">${overview.onTime}/${overview.flightCount} 段 · 口径：到达不晚于计划 +15 分（A15）</div>
+        <div class="stat__foot">${overview.onTime}/${overview.delayKnown} 段 · 到达不晚于计划 15 分钟</div>
       </div>
     </div>
   </section>
@@ -621,7 +822,8 @@
   <section class="section">
     <div class="section__head">
       <h2 class="section__title">游历城市</h2>
-      <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数</span>
+      <span class="section__hint">${overview.citiesAll.length} 座 · 按到访次数
+        <a class="hintbtn" href="#/cities">查看明细</a></span>
     </div>
     <div class="chips">
       ${overview.citiesAll
@@ -776,6 +978,12 @@
     const seatKinds = new Map();
     list.forEach((r) => seatKinds.set(r.seatKind, (seatKinds.get(r.seatKind) || 0) + 1));
 
+    // 归并发生在**筛选之后**：搜「G3264」只剩一段，卡片自然退化成单段，
+    // 不会因为词条把整次出行都拽出来。
+    const trips = U.buildRailTrips(list);
+    const merged = trips.length < list.length;
+    const countText = merged ? `${list.length} 段 · ${trips.length} 次出行` : `${list.length} 段行程`;
+
     return `<div class="wrap">
   <div class="listhead">
     ${viewToggle('rail', 'list')}
@@ -790,11 +998,20 @@
   </div>
 
   <div class="section__head">
-    <h2 class="section__title" aria-live="polite">${list.length} 段行程</h2>
+    <h2 class="section__title" aria-live="polite">${countText}</h2>
     <span class="section__hint">${[...seatKinds.entries()].map(([k, v]) => `${k} ${v}`).join(' · ')}</span>
   </div>
 
-  ${list.length ? grouped(list, railCard, (r) => r.date) : '<div class="empty">这个筛选条件下没有记录</div>'}
+  ${
+    trips.length
+      ? grouped(
+          trips,
+          (t) => (t.legs.length > 1 ? tripCard(t) : railCard(t.legs[0])),
+          (t) => t.date,
+          merged ? '次出行' : '段',
+        )
+      : '<div class="empty">这个筛选条件下没有记录</div>'
+  }
 
   <div class="fold" id="voided">
     <button class="fold__btn" data-fold>
@@ -1027,6 +1244,7 @@
     const host = document.getElementById('mapHost');
     if (!t || !host) return;
     mapRef = M.map.renderTrack(t, host);
+    addMapExpandBtn(host);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1044,6 +1262,10 @@
     const hash = location.hash || '#/';
     const m = hash.match(/^#\/track\/(.+)$/);
     if (m) return { tab: 'tracks', trackId: decodeURIComponent(m[1]), detail: true };
+
+    // 游历城市明细：概览的下钻页。tab 仍算 home（底栏高亮不变），
+    // 但顶栏要显示返回、且不挂首页那张地图。
+    if (/^#\/cities\/?$/.test(hash)) return { tab: 'home', sub: 'cities' };
 
     // #/flights/map 这种深链：既是可收藏的入口，也让自动化截图能直达航迹图
     const mapView = /\/map$/.test(hash);
@@ -1101,17 +1323,19 @@
     // F8：统计/地图模块没到位时先占位，注入完再渲染（同几何的占位模式）
     if (!route.detail) {
       const need =
-        route.tab === 'home'
-          ? 'routemap'
-          : (route.tab === 'flights'
-              ? state.flightView
-              : route.tab === 'rail'
-                ? state.railView
-                : state.trackView) === 'stats'
-            ? 'stats'
-            : (route.tab === 'flights' ? state.flightView : route.tab === 'rail' ? state.railView : state.trackView) === 'map'
-              ? 'routemap'
-              : null;
+        route.sub
+          ? null
+          : route.tab === 'home'
+            ? 'routemap'
+            : (route.tab === 'flights'
+                ? state.flightView
+                : route.tab === 'rail'
+                  ? state.railView
+                  : state.trackView) === 'stats'
+              ? 'stats'
+              : (route.tab === 'flights' ? state.flightView : route.tab === 'rail' ? state.railView : state.trackView) === 'map'
+                ? 'routemap'
+                : null;
       if (need && !(window.MYWORLD && window.MYWORLD[need])) {
         view.innerHTML = skel(2);
         ensureMod(need).then(() => render('keep'));
@@ -1124,10 +1348,15 @@
       M.map.destroy();
       mapRef = null;
     }
-    M.routemap.destroy();
+    // routemap 是懒加载模块：没进过地图页时它还不存在（直接开 #/rail/list 就会命中）
+    if (M.routemap) M.routemap.destroy();
+    // 展开态的地图宿主随 innerHTML 一起销毁，body 上的锁滚动标志要手动清，
+    // 否则换页后整页滚不动
+    document.body.classList.remove('map-expanded');
 
     let html;
     if (route.detail) html = viewTrackDetail(route.trackId);
+    else if (route.sub === 'cities') html = viewCities();
     else if (route.tab === 'flights') html = viewFlights();
     else if (route.tab === 'rail') html = viewRail();
     else if (route.tab === 'tracks') html = viewTracks();
@@ -1135,9 +1364,12 @@
 
     // 补一个屏幕阅读器用的 h1：顶栏标题是 <p>（否则一页两个 h1），
     // 视图内部直接从 h2 起步，层级才不断档
-    const pageTitle = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
-      route.tab
-    ];
+    const pageTitle =
+      route.sub === 'cities'
+        ? '游历城市'
+        : { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
+            route.tab
+          ];
     // R3：支持 View Transitions 时给切页一个交叉淡入；reduced-motion 或老浏览器直换
     const pageHtml = `<h1 class="sr-only">${esc(pageTitle)}</h1>` + html;
     const canVT =
@@ -1166,19 +1398,20 @@
     const title = pageTitle;
     document.getElementById('topTitle').textContent = title;
     // F4：浏览器标题跟随路由，多标签/书签/分享才分得清页面
-    document.title = route.detail
-      ? `${pageTitle} · MyWorld`
-      : route.tab === 'home'
-        ? 'MyWorld · 行程记录'
-        : `${pageTitle} · MyWorld`;
+    document.title =
+      route.detail || route.sub
+        ? `${pageTitle} · MyWorld`
+        : route.tab === 'home'
+          ? 'MyWorld · 行程记录'
+          : `${pageTitle} · MyWorld`;
 
     const back = document.getElementById('back');
-    back.style.display = route.detail ? 'flex' : 'none';
+    back.style.display = route.detail || route.sub ? 'flex' : 'none';
 
     if (route.detail) mountTrackMap(route.trackId);
     else if (route.tab === 'flights' && state.flightView === 'map') mountRouteMap('flights');
     else if (route.tab === 'rail' && state.railView === 'map') mountRouteMap('rail');
-    else if (route.tab === 'home') mountCityMap();
+    else if (route.tab === 'home' && !route.sub) mountCityMap();
 
     if (reason !== 'keep') window.scrollTo({ top: 0, behavior: 'auto' });
   }

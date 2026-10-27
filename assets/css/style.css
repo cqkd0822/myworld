@@ -860,6 +860,192 @@ a {
   flex-wrap: wrap;
 }
 
+/* 多段合一：一次出行里的换乘压在一张卡里，段间用虚线轴串起来。
+   单段卡仍走上面的 .rail，两种卡片的圆角/底色/内边距保持一致。 */
+.rail--trip {
+  display: block;
+  padding: 12px 14px 11px;
+}
+
+.trip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trip__date {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--rail);
+  background: var(--rail-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+
+.trip__summary i {
+  color: var(--brand);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.trip__legs {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.trip__leg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.trip__leg .rail__no {
+  flex: 0 0 52px;
+  width: 52px;
+  padding: 4px 2px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.trip__leg-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.trip__stops {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--ink-2);
+  min-width: 0;
+}
+
+.trip__stops span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip__stops i {
+  color: var(--ink-3);
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.trip__stops i svg {
+  width: 11px;
+  height: 11px;
+}
+
+.trip__leg-meta {
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 时刻列：只有补录过发到时刻的段才出现，缺了就整列不渲染，
+   避免出现一片 "--:--" 把卡片撑成表格 */
+.trip__times {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.trip__times i {
+  width: 12px;
+  height: 1px;
+  background: var(--line);
+  margin: 1px 0;
+}
+
+/* 换乘节点：竖虚线贯穿上下两段，中间一个圆点 */
+.trip__link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 2px 0 2px 62px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.trip__link::before {
+  content: '';
+  position: absolute;
+  left: 25px;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background-image: linear-gradient(to bottom, var(--line) 50%, transparent 50%);
+  background-size: 1px 6px;
+}
+
+.trip__link::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0 0 1.5px var(--ink-3);
+}
+
+.trip__link-wait {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 推定出来的换乘：时刻没录，别让它看起来和精确判定一样确定 */
+.trip__link-wait--na {
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+
+.trip__link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --------------------------------------------------------------------------
    轨迹
    -------------------------------------------------------------------------- */
@@ -2338,6 +2524,202 @@ a {
 }
 
 /* ==========================================================================
+   2026-10-26 晚 · 地图横屏展开 + 游历城市明细弹层
+   ========================================================================== */
+
+/* ---- 地图展开按钮：三类宿主通用，浮在 GL 控件之上 ---- */
+.map-expand {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1200; /* 宿主已 isolation:isolate，压过 GL 自带的几百级控件即可 */
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(12, 18, 32, 0.82);
+  color: #cdd6e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.map-expand:active {
+  transform: scale(0.94);
+}
+
+/* 展开态：全视口覆盖。不用 CSS rotate 硬转——转了之后 GL 的触摸坐标
+   不会跟着映射，拖拽方向会反。横屏体验靠 fullscreen + orientation.lock
+   （Android），iOS 退化成覆盖层 + 「横握手机」提示。 */
+.citymap.is-expanded,
+.tmap.is-expanded,
+.detail__map.is-expanded {
+  position: fixed;
+  inset: 0;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  border: 0;
+  border-radius: 0;
+  z-index: 2000; /* topbar/tabbar 是 50/60 */
+}
+
+body.map-expanded {
+  overflow: hidden;
+}
+
+/* 竖屏时的轻提示；进横屏后自动消失 */
+.citymap.is-expanded::after,
+.tmap.is-expanded::after,
+.detail__map.is-expanded::after {
+  content: '横握手机查看更佳';
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 1201;
+  background: rgba(12, 18, 32, 0.85);
+  color: #9aa5bd;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+@media (orientation: landscape) {
+  .citymap.is-expanded::after,
+  .tmap.is-expanded::after,
+  .detail__map.is-expanded::after {
+    display: none;
+  }
+}
+
+/* ---- 游历城市明细（独立页 #/cities）：入口按钮 + 统计条 + 清单 ---- */
+.hintbtn {
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/* 四格统计条：城市数 + 三源到访次数 */
+.citysum {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line-soft);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+.citysum > div {
+  background: var(--card);
+  padding: 11px 8px 10px;
+  text-align: center;
+}
+.citysum b {
+  display: block;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.citysum span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.citylist {
+  padding: 2px 14px;
+}
+
+.cityrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.cityrow:last-child {
+  border-bottom: 0;
+}
+/* 名次按全量算，搜索后仍显示总榜位置 */
+.cityrow__rank {
+  width: 20px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/* 城市名（前面可带省份）。flex:1 吃掉剩余宽度，把次数和来源推到右边 */
+.cityrow__place {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 省份：小一号灰字，与城市名同行；直辖市省名 == 市名时不渲染（见 viewCities） */
+.cityrow__place i {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-right: 6px;
+}
+.cityrow__n {
+  min-width: 42px;
+  text-align: right;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.cityrow__src {
+  margin-left: auto;
+  display: flex;
+  gap: 5px;
+}
+.src {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--line-soft);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.src--flight {
+  color: var(--brand-deep);
+}
+.src--rail {
+  color: var(--rail);
+}
+.src--track {
+  color: var(--amber);
+}
+
+.citynote {
+  margin: 12px 4px 4px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+.citynote strong {
+  color: var(--ink-2);
+  font-weight: 600;
+}
    2026-10-27 · 对齐系统 R1–R5 落地层
    R1 双边线/刻度/高度/字阶（base 已改）+ 数字排版 + 光学修正
    R2 年份吸顶修正（base）+ meta 两行封顶 + 右列
