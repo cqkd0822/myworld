@@ -33,7 +33,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MyWorld" />
 
-    <link rel="stylesheet" href="assets/css/style.css?v=77b1a438" />
+    <link rel="stylesheet" href="assets/css/style.css?v=3c798704" />
   </head>
 
   <body>
@@ -54,6 +54,9 @@
           </svg>
         </button>
         <p class="topbar__title" id="topTitle">MyWorld</p>
+        <button class="topbar__density" id="densityBtn" type="button" aria-pressed="false" aria-label="切换紧凑密度">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
       </div>
     </header>
 
@@ -68,13 +71,13 @@
       这样做是为了让 index.html 直接用 file:// 双击打开也能跑——
       ES module 在 file:// 下会被 CORS 拦掉，那样本地预览就没法用了。
     -->
-    <script defer src="assets/data/site.js?v=77b1a438"></script>
-    <script defer src="assets/data/airports.js?v=77b1a438"></script>
-    <script defer src="assets/js/data-utils.js?v=77b1a438"></script>
-    <script defer src="assets/js/geo.js?v=77b1a438"></script>
-    <script defer src="assets/js/raw.js?v=77b1a438"></script>
-    <script defer src="assets/js/map.js?v=77b1a438"></script>
+    <script defer src="assets/data/site.js?v=3c798704"></script>
+    <script defer src="assets/data/airports.js?v=3c798704"></script>
+    <script defer src="assets/js/data-utils.js?v=3c798704"></script>
+    <script defer src="assets/js/geo.js?v=3c798704"></script>
+    <script defer src="assets/js/raw.js?v=3c798704"></script>
+    <script defer src="assets/js/map.js?v=3c798704"></script>
     <!-- stats.js / routemap.js 改按需注入（app.js ensureMod），首屏省 18.4 KB gz -->
-    <script defer src="assets/js/app.js?v=77b1a438"></script>
+    <script defer src="assets/js/app.js?v=3c798704"></script>
   </body>
 </html>

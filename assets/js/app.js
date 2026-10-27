@@ -271,11 +271,10 @@
     if (km) meta.push(km);
     meta.push(esc(f.aircraft));
     if (f.cabin) meta.push(esc(f.cabin) + (f.seat && f.seat !== '--' ? ` · ${esc(f.seat)}` : ''));
-    meta.push(
+    const priceSpan =
       f.price != null
         ? `<span class="price">¥${U.formatNumber(f.price)}</span>`
-        : '<span class="price price--unknown">票价未记录</span>',
-    );
+        : '<span class="price price--unknown">票价未记录</span>';
 
     const notes = [f.from.note, f.to.note].filter(Boolean);
     if (f.reg && /存疑/.test(f.reg)) notes.push(`注册号 ${f.reg}`);
@@ -308,6 +307,7 @@
   </div>
   <div class="flight__bottom">
     <div class="flight__meta">${meta.map(esc0).join('<i class="dot"></i>')}</div>
+    ${priceSpan}
   </div>
   ${
     notes.length
@@ -346,6 +346,13 @@
 </article>`;
   }
 
+  /** R3 骨架屏：块高 132/88 均为 4 的倍数，替换老的「正在加载…」纯文字 */
+  function skel(n = 3) {
+    return `<div class="skelwrap" aria-busy="true">${Array.from({ length: n }, (_, i) =>
+      `<div class="skel${i === n - 1 ? ' skel--short' : ''}"></div>`,
+    ).join('')}</div>`;
+  }
+
   /** 按年份分组渲染一串卡片。unit 是年份头上的计数单位（航班/铁路「段」，轨迹「条」） */
   function grouped(items, renderCard, getDate, unit = '段') {
     const byYear = new Map();
@@ -363,8 +370,8 @@
         (y) => `<section>
   <div class="year-head">
     <span>${y} 年</span>
-    <span class="year-head__count">${byYear.get(y).length} ${unit}</span>
     <span class="year-head__rule"></span>
+    <span class="year-head__count">${byYear.get(y).length} ${unit}</span>
   </div>
   <div class="group">${byYear.get(y).map(renderCard).join('')}</div>
 </section>`,
@@ -996,7 +1003,7 @@
       : ''
   }
 
-  <div style="display:flex;gap:10px;margin-top:14px">
+  <div class="btnrow">
     <button class="btn" type="button" data-dlgpx="${esc(t.id)}">
       ${icon.download} 下载 GPX（原始精度 · ${U.formatNumber(s.rawPoints)} 点）
     </button>
@@ -1085,7 +1092,7 @@
     if (route.detail) {
       const t0 = tracks.find((x) => x.id === route.trackId);
       if (t0 && !t0.paths) {
-        view.innerHTML = '<div class="boot">正在加载轨迹几何…</div>';
+        view.innerHTML = skel(2);
         ensureGeometry(t0).then(() => render('keep'));
         return;
       }
@@ -1106,7 +1113,7 @@
               ? 'routemap'
               : null;
       if (need && !(window.MYWORLD && window.MYWORLD[need])) {
-        view.innerHTML = '<div class="boot">正在加载模块…</div>';
+        view.innerHTML = skel(2);
         ensureMod(need).then(() => render('keep'));
         return;
       }
@@ -1131,7 +1138,13 @@
     const pageTitle = { home: M.site.title, flights: '航班记录', rail: '铁路行程', tracks: '徒步足迹' }[
       route.tab
     ];
-    view.innerHTML = `<h1 class="sr-only">${esc(pageTitle)}</h1>` + html;
+    // R3：支持 View Transitions 时给切页一个交叉淡入；reduced-motion 或老浏览器直换
+    const pageHtml = `<h1 class="sr-only">${esc(pageTitle)}</h1>` + html;
+    const canVT =
+      typeof document.startViewTransition === 'function' &&
+      !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (canVT) document.startViewTransition(() => { view.innerHTML = pageHtml; });
+    else view.innerHTML = pageHtml;
     document.getElementById('tabs').innerHTML = renderTabs(route.tab);
 
     // 航迹图占满一屏，列表页那条「给底部标签栏留空间」的 padding 就多余了
@@ -1377,6 +1390,25 @@
     applySearchQuery(inp);
   });
 
+  // R5 紧凑密度：持久化到 localStorage，html[data-density] 驱动 CSS
+  const DENSITY_KEY = 'myworld.density';
+  function applyDensity(d) {
+    document.documentElement.dataset.density = d;
+    const b = document.getElementById('densityBtn');
+    if (b) b.setAttribute('aria-pressed', String(d === 'compact'));
+  }
+  applyDensity(localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'cozy');
+  const densityBtn = document.getElementById('densityBtn');
+  if (densityBtn) {
+    densityBtn.addEventListener('click', () => {
+      const next = document.documentElement.dataset.density === 'compact' ? 'cozy' : 'compact';
+      try {
+        localStorage.setItem(DENSITY_KEY, next);
+      } catch (_) { /* 隐私模式忽略 */ }
+      applyDensity(next);
+    });
+  }
+
   window.addEventListener('hashchange', render);
 
   // F10：断网/上线切换提示（与 F2 横幅复用）
@@ -1430,6 +1462,7 @@
 
   async function boot() {
     const el = document.getElementById('boot');
+    if (el) el.innerHTML = skel(3);
     try {
       await loadRemote();
       initDatas();
