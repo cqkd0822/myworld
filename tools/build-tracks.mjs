@@ -810,6 +810,20 @@ const MANIFEST = [
     eleThresholdM: 10,
   },
   {
+    // 2026 黄山徽州古城环新安江越野赛（10-31 歙县徽州古城府衙广场起终点）。
+    // 组别待确认：GPS 41.88 km 对不上宣传的 75/50/35/25K（国内赛事标称与实际
+    // 常有出入），拿到成绩截图后补 itra/组别字段并改名。CRLF 已归一为 LF。
+    id: "2026-10-31-shexian-huizhou-gucheng",
+    file: "2026-10-31-shexian-huizhou-gucheng.gpx",
+    name: "徽州古城环新安江越野赛",
+    date: "2026-10-31",
+    region: "安徽 · 歙县",
+    kind: "race",
+    color: "#f472b6",
+    toleranceM: 4,
+    eleThresholdM: 10,
+  },
+  {
     // 企业微信收件 GPX（GPSBabel 导出，CRLF 已归一为 LF）。10-18 原计划 G1372 宜春返杭
     // （后改签 10-25），当天早上改跑西湖群山环线：吴山起、经五云山/之江/虎跑侧回吴山。
     id: "2026-10-18-hangzhou-xihu-qunshan",

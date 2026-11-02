@@ -1229,9 +1229,7 @@
   </div>
 
   <p class="footnote">
-    原始 ${U.formatNumber(s.rawPoints)} 个点（${U.formatNumber(
-      Math.round(s.sourceBytes / 1024),
-    )} KB）已抽稀到 ${U.formatNumber(s.shownPoints)} 个点（容差 ${s.toleranceM} 米），
+    原始 ${U.formatNumber(s.rawPoints)} 个点已抽稀到 ${U.formatNumber(s.shownPoints)} 个点（容差 ${s.toleranceM} 米），
     **仅用于地图渲染**，肉眼看不出差别；下载的 GPX 由 track_raw 在浏览器现算重建，
     与入库几何逐点一致（含时间戳）。
     爬升按 ${s.eleThresholdM} 米阈值过滤高度抖动后累加，统计基于原始点。
