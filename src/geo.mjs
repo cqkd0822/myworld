@@ -312,13 +312,59 @@ export function smoothElevation(segments, window = 7) {
  * 赛道，5 点滑动平均会把距离压到 310 公里（少 8%），因为平滑在盘山发卡弯处
  * 抄了近道。原始 GPS 抖动带来的虚高通常只有 1~2%，远比抄近道造成的低估小。
  *
- * 爬升：先做阈值过滤。低于阈值的起伏视为高度抖动丢弃，否则 ±1 米的噪声在
- * 几万个点上会被累加成几千米的虚假爬升。10 米是常见取值。
+ * 爬升：先对海拔做 40 秒居中移动平均（设备级低通），再按 eleThreshold 死区
+ * 累加。旧 doctrine「平滑会抹掉陡坡起步段、只能靠死区」已被标定推翻：源 GPX
+ * 海拔为整数米 + 秒级采样，取整锯齿与 GPS 抖动产生大量 ±1~2 m 往复，纯死区
+ * 要么放行锯齿（2 m 档歙县场算 1932 m）、要么连真实起伏一起砍（10 m 档 1348 m）；
+ * 40 s 平滑 + 2 m 死区复现设备口径真值 1459 m（算得 1458 m，差 1 m = 整数米
+ * 分辨率）。平滑只作用于爬升/下降累加；距离、海拔区间仍用原始点。
  *
  * 距离只在段内累加，段与段之间不连线（段间没走路）。
  */
 /** 相邻点间隔超过它即视为休息（午餐 / 过夜 / 暂停），整段剔除。10 分钟对徒步是稳妥阈值。 */
 const REST_GAP_MS = 10 * 60 * 1000;
+
+export /** 爬升累加前的海拔低通：40 秒居中移动平均（无时间戳的段退化为 21 点窗口）。 */
+const ELE_SMOOTH_WIN_MS = 40 * 1000;
+
+function smoothEleSeries(seg) {
+  const idx = [];
+  const ts = [];
+  const es = [];
+  for (let i = 0; i < seg.length; i++) {
+    if (typeof seg[i].ele === 'number') {
+      idx.push(i);
+      es.push(seg[i].ele);
+      const t = seg[i].time ? Date.parse(seg[i].time) : NaN;
+      ts.push(Number.isFinite(t) ? t : NaN);
+    }
+  }
+  const out = new Array(seg.length).fill(undefined);
+  if (idx.length === 0) return out;
+
+  const timed = ts.every((t) => Number.isFinite(t));
+  const ps = [0];
+  for (let i = 0; i < es.length; i++) ps.push(ps[i] + es[i]);
+
+  if (timed) {
+    const half = ELE_SMOOTH_WIN_MS / 2;
+    let a = 0;
+    let b = 0;
+    for (let i = 0; i < es.length; i++) {
+      while (a < i && ts[i] - ts[a] > half) a++;
+      while (b < es.length - 1 && ts[b + 1] - ts[i] <= half) b++;
+      out[idx[i]] = (ps[b + 1] - ps[a]) / (b + 1 - a);
+    }
+  } else {
+    const half = 10;
+    for (let i = 0; i < es.length; i++) {
+      const a = Math.max(0, i - half);
+      const b = Math.min(es.length - 1, i + half);
+      out[idx[i]] = (ps[b + 1] - ps[a]) / (b + 1 - a);
+    }
+  }
+  return out;
+}
 
 export function trackStats(segments, eleThreshold = 10) {
   let distance = 0;
@@ -332,6 +378,7 @@ export function trackStats(segments, eleThreshold = 10) {
 
   for (const seg of segments) {
     pointCount += seg.length;
+    const smoothEle = smoothEleSeries(seg);
     let lastEle;
     let pending = 0;
 
@@ -349,18 +396,22 @@ export function trackStats(segments, eleThreshold = 10) {
       }
 
       if (typeof p.ele === 'number') {
+        // 海拔区间用原始值；爬升/下降用低通后的序列。
         if (p.ele < minEle) minEle = p.ele;
         if (p.ele > maxEle) maxEle = p.ele;
 
-        if (typeof lastEle === 'number') {
-          pending += p.ele - lastEle;
-          if (Math.abs(pending) >= eleThreshold) {
-            if (pending > 0) ascent += pending;
-            else descent -= pending;
-            pending = 0;
+        const se = smoothEle[i];
+        if (typeof se === 'number') {
+          if (typeof lastEle === 'number') {
+            pending += se - lastEle;
+            if (Math.abs(pending) >= eleThreshold) {
+              if (pending > 0) ascent += pending;
+              else descent -= pending;
+              pending = 0;
+            }
           }
+          lastEle = se;
         }
-        lastEle = p.ele;
       }
     }
   }
