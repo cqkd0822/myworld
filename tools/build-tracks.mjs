@@ -59,8 +59,11 @@ const DATA_OUT = join(ROOT, 'assets', 'data', 'tracks.js');
  *                300 公里级的长轨迹用 3 米会产生上万个点，12 米在整条赛道
  *                的尺度下连一个像素都占不到，纯属浪费体积。
  * eleThresholdM —— 累计爬升时的起伏过滤阈值（米）。低于它的高度变化视为
- *                抖动丢弃。10 米是个稳妥的默认值：同一条赛道用 10 米算出
- *                24258 米爬升，与官方公布的约 24000 米吻合。
+ *                抖动丢弃。3 米为标定后的默认值：以两场官方爬升已知的赛事
+ *                校准——歙县新安试墨 40K 官方约 1700 m（3 m 阈值算 1708、
+ *                10 m 阈值只算 1348、原始累加 2465 含手表抖动）；杭州 Relo
+ *                25K 官方 1405 m（3 m 阈值算 1413、10 m 阈值 1249）。两条
+ *                标定曲线都在 3 米档与官方误差 <1%，故全局取 3。
  */
 const MANIFEST = [
   {
@@ -72,7 +75,7 @@ const MANIFEST = [
     kind: 'race',
     color: '#1B6FF0',
     toleranceM: 3,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
     // ITRA 官方成绩（athlete 6845683 LEI Ting），2026-10 从 ITRA 页面录入。
     // points 为 null 是因为截图时该值被成绩弹窗挡住，没读到就不编。
     itra: {
@@ -101,7 +104,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#1B6FF0',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-02-04-hangzhou-daicun',
@@ -112,7 +115,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#D9482F',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-02-09-hangzhou-chaoshan',
@@ -123,7 +126,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#34d399',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-02-15-ningbo-xiangshan',
@@ -134,7 +137,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f5b04d',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-02-23-hangzhou-siwuling',
@@ -145,7 +148,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#c084fc',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-03-01-hangzhou-jingshan',
@@ -156,7 +159,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#38bdf8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-03-02-hangzhou-wuchaoshan',
@@ -167,7 +170,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#fb7185',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-03-07-shaoxing-shangqing',
@@ -178,7 +181,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#a3e635',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-03-09-hangzhou-dongmingshan',
@@ -189,7 +192,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f97316',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-04-shenzhen-maluanshan',
@@ -200,7 +203,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#2dd4bf',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-05-shenzhen-dananshan',
@@ -211,7 +214,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#e879f9',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-06-shenzhen-dongxiyong',
@@ -222,7 +225,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#94a3b8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-11-zhengzhou-shaoshishan',
@@ -233,7 +236,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#1B6FF0',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-18-shenzhen-wutongshan',
@@ -244,7 +247,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#D9482F',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-19-shenzhen-sanshuixian-dnf',
@@ -255,7 +258,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#34d399',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-04-26-shaoxing-zoumagang',
@@ -266,7 +269,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f5b04d',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-02-enshi-chaodongyan',
@@ -277,7 +280,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#c084fc',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-02-enshi-chaodongyan-2',
@@ -288,7 +291,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#38bdf8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-03-enshi-qingjiang',
@@ -299,7 +302,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#fb7185',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-17-yingtan-longhushan',
@@ -310,7 +313,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#a3e635',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-18-fuzhou-dajueshan',
@@ -321,7 +324,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f97316',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-05-24-pingxiang-wugongshan',
@@ -332,7 +335,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#2dd4bf',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-06-14-hangzhou-wuyue',
@@ -343,7 +346,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#e879f9',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-06-22-hangzhou-biaoyixian-dnf',
@@ -354,7 +357,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#94a3b8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-07-13-hangzhou-yunling',
@@ -365,7 +368,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#1B6FF0',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-07-26-huihang',
@@ -376,7 +379,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#D9482F',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-08-03-hangzhou-maling',
@@ -387,7 +390,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#34d399',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-08-17-hangzhou-yuhuangshan',
@@ -398,7 +401,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f5b04d',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-08-23-hongkong-taimoshan',
@@ -409,7 +412,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#c084fc',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-08-24-hongkong-wilson',
@@ -420,7 +423,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#38bdf8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-08-31-hangzhou-biaoyixian-dnf2',
@@ -431,7 +434,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#fb7185',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-09-13-huzhou-zhangli',
@@ -442,7 +445,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#a3e635',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
 
   /* —— 2025-09~12 第二批：五台山顺朝两日、军嶂古道越野跑等 9 条（2026-10 入库） —— */
@@ -455,7 +458,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#38bdf8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-09-30-xinzhou-wutaishan-2',
@@ -466,7 +469,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#fb7185',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-10-07-hangzhou-changle',
@@ -477,7 +480,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#a3e635',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-11-15-pingxiang-wugongshan-full',
@@ -488,7 +491,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#f97316',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-11-23-hangzhou-xingmeijian',
@@ -499,7 +502,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#2dd4bf',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-11-29-hangzhou-biaoyixian',
@@ -510,7 +513,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#e879f9',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-12-07-wuxi-junzhang',
@@ -521,7 +524,7 @@ const MANIFEST = [
     kind: 'run',
     color: '#94a3b8',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
     itra: {
       name: 'wuxijunzhang - 14k',
       points: 0,
@@ -547,7 +550,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#1B6FF0',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: '2025-12-31-huangshan-newyear',
@@ -558,7 +561,7 @@ const MANIFEST = [
     kind: 'hike',
     color: '#D9482F',
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
 
   /* —— 2026 年第三批 19 条：企业微信缓存三次扫描，几何签名去重后入库 —— */
@@ -571,7 +574,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-01-03-quzhou-jianglangshan",
@@ -582,7 +585,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-01-24-guilin-xingping",
@@ -593,7 +596,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-01-25-guilin-baili",
@@ -604,7 +607,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-02-14-dabieshan-cross",
@@ -615,7 +618,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-03-08-hangzhou-relo",
@@ -626,7 +629,7 @@ const MANIFEST = [
     kind: "race",
     color: "#1B6FF0",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
     // ITRA 赛名 HANGZHOU TRAIL，组别 24km/1405m+ 与 GPX 实测 24.83km/1249m 吻合
     itra: {
       name: "HANGZHOU TRAIL - 25km",
@@ -653,7 +656,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-03-20-hangzhou-jingshan-2026",
@@ -664,7 +667,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-03-21-shaoxing-xianglu",
@@ -675,7 +678,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-03-27-chuanxi-xiaojinshan",
@@ -686,7 +689,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-04-03-chizhou-jiuhuashan",
@@ -697,7 +700,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-04-12-fuzhou-guling",
@@ -708,7 +711,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-04-18-hangzhou-zhongtai",
@@ -719,7 +722,7 @@ const MANIFEST = [
     kind: "race",
     color: "#1B6FF0",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
     // ITRA 赛名 SN into the wild trail challenge-hangzhou
     itra: {
       name: "SN into the wild trail challenge-hangzhou - 24km",
@@ -746,7 +749,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-05-26-ali-kailash",
@@ -757,7 +760,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-06-07-hangzhou-shililangdang",
@@ -768,7 +771,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-06-19-wuhan-jiuzhenshan",
@@ -779,7 +782,7 @@ const MANIFEST = [
     kind: "race",
     color: "#1B6FF0",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
     // ITRA 赛名 SALOMON Wuhan Community Dragon Boat Festival Mountain Trail Race，
     // ITRA 记录的比赛日是 2026-06-20（周六），GPX 文件名日期是 06-19，以 GPX 为准
     itra: {
@@ -807,7 +810,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     // 2026 黄山徽州古城环新安江百公里越野赛（怪兽小太阳团队执行，10-31 歙县
@@ -824,7 +827,7 @@ const MANIFEST = [
     kind: "race",
     color: "#f472b6",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     // 企业微信收件 GPX（GPSBabel 导出，CRLF 已归一为 LF）。10-18 原计划 G1372 宜春返杭
@@ -837,7 +840,7 @@ const MANIFEST = [
     kind: "run",
     color: "#22d3ee",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     // 10-23 K515 杭州南→萍乡（软卧过夜车），10-24 上山两日穿越，10-25 G1422 宜春→杭州东返回。
@@ -852,7 +855,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#8b5cf6",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
   {
     id: "2026-08-15-emeishan",
@@ -863,7 +866,7 @@ const MANIFEST = [
     kind: "hike",
     color: "#D9482F",
     toleranceM: 4,
-    eleThresholdM: 10,
+    eleThresholdM: 3,
   },
 ];
 
