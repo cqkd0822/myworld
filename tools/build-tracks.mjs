@@ -867,6 +867,20 @@ const MANIFEST = [
     toleranceM: 4,
     eleThresholdM: 2,
   },
+  {
+    // 11-07 周六萧山戴村进出的船坞山环线（萧山最高峰，主峰 744 m）。
+    // 与 2025-02-04「杭州戴村」同一起点区域，但那条是 6.6 km 短途，
+    // 这条是登顶环线 14.25 km / 爬升 1323 m，两次独立记录。
+    id: "2026-11-07-hangzhou-chuanwushan",
+    file: "2026-11-07-hangzhou-chuanwushan.gpx",
+    name: "萧山船坞山环线",
+    date: "2026-11-07",
+    region: "浙江 · 杭州",
+    kind: "hike",
+    color: "#4ade80",
+    toleranceM: 3,
+    eleThresholdM: 2,
+  },
 ];
 
 /* ------------------------------------------------------------------ */
