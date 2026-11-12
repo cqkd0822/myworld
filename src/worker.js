@@ -63,9 +63,9 @@ export default {
           '<body style="font-family:-apple-system,PingFang SC,sans-serif;background:#0c1220;color:#eef2f9;padding:40px">' +
           '<h1>MyWorld API</h1><p>站点与接口同域；数据真源是 Cloudflare D1 <code>myworld</code>。</p><ul>' +
           '<li><a style="color:#5aa2ff" href="/api/health">/api/health</a></li>' +
-          '<li><a style="color:#5aa2ff" href="/api/flights">/api/flights</a></li>' +
-          '<li><a style="color:#5aa2ff" href="/api/rail">/api/rail</a> · <a style="color:#5aa2ff" href="/api/rail-voided">/api/rail-voided</a></li>' +
-          '<li><a style="color:#5aa2ff" href="/api/tracks">/api/tracks</a>（元数据 + 统计）</li>' +
+          '<li><a style="color:#5aa2ff" href="/api/flights">/api/flights</a>（航班，含 note 备注）</li>' +
+          '<li><a style="color:#5aa2ff" href="/api/rail">/api/rail</a> · <a style="color:#5aa2ff" href="/api/rail-voided">/api/rail-voided</a>（铁路 / 未成行）</li>' +
+          '<li><a style="color:#5aa2ff" href="/api/tracks">/api/tracks</a>（轨迹元数据 + 统计；条数见 <a style="color:#5aa2ff" href="/api/health">/api/health</a>，不在此页硬编码）</li>' +
           '<li>/api/tracks/:id/raw —— 原始点（gzip+base64），前端解码后本地抽稀/算剖面</li></ul>' +
           '<p style="color:#667089">静态站点由同一个 Worker 的 Assets 提供。</p>',
         { headers: { 'content-type': 'text/html; charset=utf-8' } },
