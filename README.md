@@ -43,6 +43,13 @@ Cloudflare Worker 「myworld」            Cloudflare D1 「myworld」
 HTTPS 正常。因此**本机公司 Wi-Fi 打不开站点属网络问题**，手机热点正常；
 彻底解决＝给 Worker 绑自定义域名（待办）。
 
+同一出口还偶发掐 `git push`：`ls-remote`/`fetch` 读正常，git-receive-pack 的
+POST 会中途被断（`the remote end hung up unexpectedly`），SSH 兜不住。
+**推送一律用 `node tools/push.mjs`**：先走常规 git push，被掐自动降级到
+GitHub REST API 逐提交复刻（blob→tree→commit→PATCH ref），每个提交 SHA
+与本地逐位比对，不一致立即中止；凭据只从 osxkeychain 取，不落盘。
+已知限制：仅快进推送已存在的远端分支，不支持 merge 提交 / force / 新分支。
+
 ## 本地开发
 
 双击 `index.html` **已不支持**（数据在服务端）。用一体式本地环境：
