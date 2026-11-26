@@ -15,4 +15,4 @@ wrangler.toml
 README.md
 *.log
 .wrangler
-gpx
+gpx/
