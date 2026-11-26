@@ -1,4 +1,11 @@
 /**
+ * [INPUT]: depends on D1 binding DB, R2 binding R2, and static assets binding ASSETS.
+ * [OUTPUT]: provides the Worker fetch handler and /gpx/:file R2 streaming route.
+ * [POS]: the single runtime entry; it routes site assets, D1 APIs, and public R2 GPX downloads.
+ * [PROTOCOL]: Update this header on change, then check AGENTS.md
+ */
+
+/**
  * MyWorld —— 单 Worker：静态站点 + /api 读模型 + 轨迹几何现算。
  *
  * 数据真源是 D1：
@@ -90,6 +97,9 @@ export default {
     }
 
     try {
+      const gpxMatch = path.match(/^\/gpx\/([a-z0-9-]+\.gpx)$/i);
+      if (gpxMatch) return r2Gpx(decodeURIComponent(gpxMatch[1]), request, env);
+
       if (path === '/api/health') {
         const [f, r, t, raw] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) n FROM flights').first(),
@@ -183,6 +193,34 @@ export default {
     }
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* R2 GPX 下发：myworld-gpx/gpx/<id>.gpx -> /gpx/<id>.gpx                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 只开放 public 前缀。source/ 前缀保存原始 GPX，但不路由。
+ * ETag 使用 R2 的 httpEtag；对象不变时浏览器拿 304。
+ */
+async function r2Gpx(key, request, env) {
+  if (!env.R2) return new Response('R2 binding is not configured', { status: 503 });
+  const object = await env.R2.get(`gpx/${key}`);
+  if (!object) return new Response('not found', { status: 404 });
+
+  const etag = object.httpEtag || `"${object.etag}"`;
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, { status: 304, headers: { etag } });
+  }
+
+  const headers = new Headers({
+    'content-type': 'application/gpx+xml; charset=utf-8',
+    'content-length': String(object.size),
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-disposition': `attachment; filename="${key}"`,
+    etag,
+  });
+  return new Response(object.body, { headers });
+}
 
 /* ------------------------------------------------------------------ */
 /* 原始点下发：D1 -> 前端（浏览器里解码 + 抽稀 + 算剖面）               */

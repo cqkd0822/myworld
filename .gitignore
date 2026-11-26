@@ -18,3 +18,8 @@ node_modules/
 .dev.vars
 *.token
 .wrangler/
+
+# GPX 只放 R2，不进 Git
+gpx/
+tools/source/
+.r2-gpx-manifest.json

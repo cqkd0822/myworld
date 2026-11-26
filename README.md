@@ -33,9 +33,8 @@ Cloudflare Worker 「myworld」            Cloudflare D1 「myworld」
   所以库里没有第二份几何。编码与精度论证见 `src/raw.js`。
 - 列表接口只取元数据：`/api/tracks` 响应约 34 KB，几何**进详情页才拉**（9~15 KB/条）。
 - Service Worker：`/api/*` network-first（数据要新鲜）、静态 cache-first（装过一次断网可看）。
-- **GitHub 的角色**：代码 + 原始 GPX 存档（`tools/source/`）+ 种子 SQL；`gpx/` 里的精简 GPX
-  只作**体积敏感的备选下载**——站点默认下载是浏览器从 `track_raw` 现算重建的**原始精度** GPX。
-- **R2 暂搁置**：开通需 Dashboard 绑付款方式；等大对象（原始 GPX/截图）需要时再迁。
+- **GitHub 的角色**：代码 + 种子 SQL；**GPX 原件与精简件不再进仓库**。
+- **R2 已启用**：bucket `myworld-gpx`。`source/` 存原始 GPX，`gpx/` 存精简 GPX；Worker 只开放 `/gpx/*` 下载，不开放 `source/*`。
 
 ## 网络限制（必读）
 
@@ -70,7 +69,7 @@ npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://loca
 
 | 数据 | 当前做法 |
 |---|---|
-| 轨迹 | 原始 GPX 放 `tools/source/` → `MANIFEST` 加一行 → `node tools/build-tracks.mjs` 生成 `seed-tracks.sql`（元数据+统计）与 `seed-raw.sql`（原始点）→ 依次 `wrangler d1 execute myworld --remote --file=...` 入库；精简 GPX 自动写 `gpx/` |
+| 轨迹 | 本地 `tools/source/` → `MANIFEST` 加一行 → `node tools/build-tracks.mjs` 生成种子 SQL → `node tools/sync-r2-gpx.mjs upload` 同步 R2 → `wrangler d1 execute` 入库 |
 | 改统计/抽稀口径 | 构建期改 `MANIFEST` 的 `toleranceM` / `eleThresholdM` → 重跑 build → 重灌两份种子（边缘 10 ms CPU 扛不住万点级全量重算，不放服务端） |
 | 改几何算法 | 只改 `src/geo.mjs` / `src/raw.js`，然后 `node tools/build-browser-geo.mjs` 重新生成浏览器包，再 `node tools/bump-cache.mjs` |
 | 航班 / 铁路 | 直接改 D1（Dashboard 控制台或 `wrangler d1 execute`）；`seed.sql` 只是历史种子。/admin 上传+视觉抽取在做 |
@@ -108,7 +107,7 @@ npx wrangler dev --persist-to $P        # 站点 + API + 本地 D1，http://loca
 - [ ] 删除另一账号下的旧 Pages 副本
 - [ ] 多用户登录与权限 —— 方案已写：[docs/prd/auth.md](docs/prd/auth.md)（待评审）
 - [ ] /admin：GPX/截图上传 → 解析/视觉抽取 → 草稿确认 → 写 D1 —— 方案已写：[docs/prd/ingest.md](docs/prd/ingest.md)（待评审）
-- [ ] R2（开通后）：原始 GPX / 截图 / 生成物
+- [x] R2：原始 GPX / 精简 GPX 已迁入 `myworld-gpx`（2026-11）
 - [ ] nightly cron：D1 快照镜像 commit 回 GitHub（恢复 git diff 审计）
 - [x] 几何只存一份：`track_raw` 为唯一真源，渲染几何在浏览器现算（2026-10）
 - [ ] 实际航程口径（AeroAPI 或系数估算）

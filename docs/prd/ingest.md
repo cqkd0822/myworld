@@ -125,13 +125,13 @@
 
 **「下载精简 GPX」按钮要改造**：现在 `app.js:938` 直接 `<a href="${s.gpx}">` 指向仓库里的静态文件 `gpx/<id>.gpx`，新上传的轨迹没有这个文件。方案：
 1. ✅ **已实施（2026-10-26）**：浏览器**从 `track_raw` 现算重建原始精度 GPX**（`unpackParts(parts,{needTime:true})` → `writeGpx` → Blob），与入库几何逐点一致、统计零失真（Node 端到端对拍：8740/14162 点全保留，距离/爬升/移动时长逐位相同）；主按钮「下载 GPX（原始精度）」，精简版降为备选按钮；**零存储、零边缘 CPU**。起因：用户反馈抽稀 GPX 失真（武功山实测距离 −1.9%、爬升 −2.2%、移动时长口径漂移）；
-2. 若开了 R2 —— 上传时把精简 GPX 一并 PUT 到 R2，`gpx_key` 存 R2 key，下载走 Worker 302 到预签名 URL；
-3. 仓库里的 `gpx/` 61 个文件保留不动（老链接不断），`tools/build-tracks.mjs` 继续服务「批量重建/改口径」的场景。
+2. R2 已启用：精简 GPX 存 `myworld-gpx/gpx/`，`gpx_key` 存 R2 key，下载走 Worker 的 `/gpx/*` 流式响应；
+3. `gpx/` 与 `tools/source/` 只作为本地工作目录，均不入 Git；批量重建后用 `tools/sync-r2-gpx.mjs upload` 回写 R2。
 
-**原始 GPX 归档**：仓库 `tools/source/` 有 18 MB（最大单文件 2.1 MB）。
-- 能开 R2 → 原件放 R2，`tracks.gpx_key` 指过去（推荐）；
-- 不能开 R2 → 阶段一**只存 sha256 + 统计**，原件让用户自己留着；或 gzip 后塞 D1（18 MB → 约 5 MB，占免费档 500 MB 单库配额的 1%，能接受但不优雅）；
-- M5 的 nightly 快照可以把原件一起 commit 回 GitHub，恢复「git diff 审计」能力。
+**原始 GPX 归档**：R2 bucket `myworld-gpx/source/` 已启用。
+- 原件只存 R2，不进 GitHub；
+- `gpx/` 与 `tools/source/` 均为本地目录并加入 `.gitignore`；
+- 上传与校验统一走 `tools/sync-r2-gpx.mjs`。
 
 ## 4. 识别通道细节
 
