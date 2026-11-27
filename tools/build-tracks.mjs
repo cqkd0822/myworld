@@ -884,7 +884,7 @@ const MANIFEST = [
   {
     id: '2026-11-21-tianmu-sijian',
     file: '2026-11-21-tianmu-sijian.gpx',
-    name: '天目四尖',
+    name: '杭州临安天目四尖',
     date: '2026-11-21',
     region: '浙江 · 杭州',
     kind: 'hike',
