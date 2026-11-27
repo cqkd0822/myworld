@@ -881,6 +881,17 @@ const MANIFEST = [
     toleranceM: 3,
     eleThresholdM: 2,
   },
+  {
+    id: '2026-11-21-hangzhou-longwangshan',
+    file: '2026-11-21-hangzhou-longwangshan.gpx',
+    name: '杭州龙王山穿越',
+    date: '2026-11-21',
+    region: '浙江 · 杭州',
+    kind: 'hike',
+    color: '#e879f9',
+    toleranceM: 4,
+    eleThresholdM: 2,
+  },
 ];
 
 /* ------------------------------------------------------------------ */

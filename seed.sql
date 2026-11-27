@@ -177,3 +177,4 @@ INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('G42
 INSERT OR REPLACE INTO meta VALUES ('seeded_at', '2026-10-12T01:58:21.843Z');
 
 INSERT INTO rail_voided (train,from_station,to_station,date,reason) VALUES ('G6539','深圳北站','香港西九龙站','2025-08-24','退票（原误记为成行 4车13D号，2026-10 更正）');
+INSERT INTO flights VALUES (101,'2026-11-26','中国国航','CA1713','杭州萧山T4','北京首都T3','空客320-271(N)','B32FG','13:00','15:25','14:57','经济舱(K)','32K',950,-28,'');
