@@ -882,9 +882,9 @@ const MANIFEST = [
     eleThresholdM: 2,
   },
   {
-    id: '2026-11-21-hangzhou-longwangshan',
-    file: '2026-11-21-hangzhou-longwangshan.gpx',
-    name: '杭州龙王山穿越',
+    id: '2026-11-21-tianmu-sijian',
+    file: '2026-11-21-tianmu-sijian.gpx',
+    name: '天目四尖',
     date: '2026-11-21',
     region: '浙江 · 杭州',
     kind: 'hike',
